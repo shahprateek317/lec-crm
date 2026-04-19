@@ -1,0 +1,522 @@
+// Life Energy Center — Pranic Healing CRM
+// Prisma schema (PostgreSQL)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Auth / Users
+// ──────────────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  COORDINATOR
+  COUNSELLOR
+  HEALER
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  phone         String?
+  passwordHash  String
+  role          Role
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  assignedClients      Client[]           @relation("AssignedCoordinator")
+  counselingSessions   CounselingSession[]
+  visitsAsHealer       Visit[]
+  healingSessions      HealingSession[]
+  healerUpdates        HealerUpdate[]
+  followUps            FollowUp[]
+  stageTransitions     StageTransition[]
+  sessions             Session[]
+  accounts             Account[]
+}
+
+// NextAuth.js v5 tables
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Client pipeline (Lead → Client)
+// ──────────────────────────────────────────────────────────────────────────
+// Single entity covers the full journey from first enquiry to course graduate.
+
+enum LeadSource {
+  FACEBOOK
+  INSTAGRAM
+  WHATSAPP
+  WALK_IN
+  REFERRAL
+  MANUAL
+  OTHER
+}
+
+enum PipelineStage {
+  NEW
+  CONTACTED
+  COUNSELING_SCHEDULED
+  COUNSELING_DONE
+  VISIT_SCHEDULED
+  VISIT_DONE
+  HEALING_ACTIVE
+  CONVERTED
+  ON_HOLD
+  LOST
+}
+
+model Client {
+  id               String         @id @default(cuid())
+  name             String
+  phone            String         @unique
+  email            String?
+  age              Int?
+  area             String?
+  issue            String?
+  issueRefined     String?
+  issueDuration    String?
+  severity         Int?           // 1-10
+  source           LeadSource     @default(MANUAL)
+  stage            PipelineStage  @default(NEW)
+  assignedToId    String?
+  assignedTo      User?          @relation("AssignedCoordinator", fields: [assignedToId], references: [id])
+  notes           String?
+  lostReason      String?
+  convertedAt     DateTime?
+  lastContactedAt DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  counselingSessions   CounselingSession[]
+  visits               Visit[]
+  healingSessions      HealingSession[]
+  payments             Payment[]
+  creditEntries        CreditLedgerEntry[]
+  distantHealingGroup  DistantHealingGroup?
+  feedbackEntries      ClientFeedback[]
+  followUps            FollowUp[]
+  whatsappMessages     WhatsAppMessage[]
+  enrollments          Enrollment[]
+  stageTransitions     StageTransition[]
+
+  @@index([stage])
+  @@index([assignedToId])
+  @@index([createdAt])
+}
+
+model StageTransition {
+  id         String         @id @default(cuid())
+  clientId   String
+  client     Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  fromStage  PipelineStage?
+  toStage    PipelineStage
+  byUserId   String?
+  byUser     User?          @relation(fields: [byUserId], references: [id])
+  note       String?
+  at         DateTime       @default(now())
+
+  @@index([clientId, at])
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Counseling & Visit
+// ──────────────────────────────────────────────────────────────────────────
+
+model CounselingSession {
+  id           String    @id @default(cuid())
+  clientId     String
+  client       Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  counsellorId String
+  counsellor   User      @relation(fields: [counsellorId], references: [id])
+  scheduledAt  DateTime
+  doneAt       DateTime?
+  issueRefined String?
+  severity     Int?
+  keyNotes     String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([clientId])
+  @@index([scheduledAt])
+}
+
+model Visit {
+  id              String    @id @default(cuid())
+  clientId        String
+  client          Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  assignedHealerId String?
+  assignedHealer   User?    @relation(fields: [assignedHealerId], references: [id])
+  scheduledAt     DateTime
+  visitedAt       DateTime?
+  initialFeedback String?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([clientId])
+  @@index([scheduledAt])
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Healing sessions (in-person at center or distant via WhatsApp group)
+// ──────────────────────────────────────────────────────────────────────────
+// Pranic Healing uses 11 major chakras — modeled as an enum for multi-select.
+
+enum Chakra {
+  CROWN
+  FOREHEAD
+  AJNA
+  THROAT
+  HEART
+  SOLAR_PLEXUS_FRONT
+  SOLAR_PLEXUS_BACK
+  NAVEL
+  MENG_MEIN
+  SPLEEN_FRONT
+  SPLEEN_BACK
+  SEX
+  BASIC
+}
+
+enum HealingMode {
+  IN_PERSON
+  DISTANT
+}
+
+model HealingSession {
+  id         String        @id @default(cuid())
+  clientId   String
+  client     Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  healerId   String
+  healer     User          @relation(fields: [healerId], references: [id])
+  mode       HealingMode   @default(IN_PERSON)
+  date       DateTime      @default(now())
+  chakras    Chakra[]
+  process    String?       // e.g. "general sweeping, localised"
+  durationMinutes Int?
+  remarks    String?
+  creditUsed Boolean       @default(true) // false for complimentary sessions
+  createdAt  DateTime      @default(now())
+
+  creditEntry   CreditLedgerEntry?
+  feedback      ClientFeedback?
+
+  @@index([clientId, date])
+  @@index([healerId, date])
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Credits & Payments
+// ──────────────────────────────────────────────────────────────────────────
+
+model CreditPackage {
+  id        String   @id @default(cuid())
+  name      String
+  amount    Int      // INR, no paise
+  credits   Int
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  payments  Payment[]
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum PaymentProvider {
+  RAZORPAY
+  MANUAL // for cash / UPI QR tracked manually
+}
+
+model Payment {
+  id                      String         @id @default(cuid())
+  clientId                String
+  client                  Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  packageId               String?
+  package                 CreditPackage? @relation(fields: [packageId], references: [id])
+  amount                  Int            // INR
+  creditsGranted          Int            @default(0)
+  provider                PaymentProvider @default(RAZORPAY)
+  providerPaymentLinkId   String?
+  providerPaymentLinkUrl  String?
+  providerPaymentId       String?
+  status                  PaymentStatus  @default(PENDING)
+  paidAt                  DateTime?
+  notes                   String?
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
+
+  creditEntry             CreditLedgerEntry?
+  enrollment              Enrollment?        @relation("EnrollmentPayment")
+
+  @@index([clientId])
+  @@index([status])
+}
+
+// Credit ledger: +delta for purchases / adjustments, -delta for usage.
+// Running balance derived, stored for fast read.
+model CreditLedgerEntry {
+  id                String          @id @default(cuid())
+  clientId          String
+  client            Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  delta             Int             // positive or negative
+  balanceAfter      Int
+  reason            String          // "Package purchase", "Healing session", "Course adjustment", etc.
+  healingSessionId  String?         @unique
+  healingSession    HealingSession? @relation(fields: [healingSessionId], references: [id])
+  paymentId         String?         @unique
+  payment           Payment?        @relation(fields: [paymentId], references: [id])
+  at                DateTime        @default(now())
+
+  @@index([clientId, at])
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Distant healing (per-client WhatsApp group)
+// ──────────────────────────────────────────────────────────────────────────
+
+model DistantHealingGroup {
+  id                 String         @id @default(cuid())
+  clientId           String         @unique
+  client             Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  whatsappGroupName  String?
+  whatsappGroupLink  String?
+  photoUrl           String?        // client photo for standard data format
+  problemAreas       String?
+  active             Boolean        @default(true)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  healerUpdates      HealerUpdate[]
+}
+
+model HealerUpdate {
+  id                  String              @id @default(cuid())
+  distantGroupId      String
+  distantGroup        DistantHealingGroup @relation(fields: [distantGroupId], references: [id], onDelete: Cascade)
+  healerId            String
+  healer              User                @relation(fields: [healerId], references: [id])
+  date                DateTime            @default(now())
+  chakras             Chakra[]
+  process             String?
+  durationMinutes     Int?
+  remarks             String?
+  postedToWhatsAppAt  DateTime?
+  createdAt           DateTime            @default(now())
+
+  @@index([distantGroupId, date])
+}
+
+model ClientFeedback {
+  id                String          @id @default(cuid())
+  clientId          String
+  client            Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  healingSessionId  String?         @unique
+  healingSession    HealingSession? @relation(fields: [healingSessionId], references: [id])
+  content           String
+  rating            Int?            // 1-5
+  submittedAt       DateTime        @default(now())
+
+  @@index([clientId, submittedAt])
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Follow-ups
+// ──────────────────────────────────────────────────────────────────────────
+
+enum FollowUpStatus {
+  PENDING
+  INTERESTED
+  DELAYED
+  NOT_RESPONDING
+  DONE
+  CANCELLED
+}
+
+enum FollowUpReason {
+  MISSED_COUNSELING
+  MISSED_VISIT
+  POST_VISIT
+  PAYMENT_REMINDER
+  LOW_CREDITS
+  COURSE_CONVERSION
+  CUSTOM
+}
+
+model FollowUp {
+  id          String         @id @default(cuid())
+  clientId    String
+  client      Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  assignedToId String?
+  assignedTo   User?         @relation(fields: [assignedToId], references: [id])
+  reason      FollowUpReason
+  status      FollowUpStatus @default(PENDING)
+  dueAt       DateTime
+  note        String?
+  completedAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([status, dueAt])
+  @@index([clientId])
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// WhatsApp messaging
+// ──────────────────────────────────────────────────────────────────────────
+
+enum WhatsAppDirection {
+  OUTBOUND
+  INBOUND
+}
+
+enum WhatsAppStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+// WhatsApp Cloud API requires pre-approved templates for proactive messages.
+// We store the template definition here; the actual approval lives with Meta.
+model WhatsAppTemplate {
+  id            String    @id @default(cuid())
+  name          String    @unique   // matches Meta template name
+  category      String                // e.g. UTILITY, MARKETING
+  language      String    @default("en")
+  bodyTemplate  String                // with {{1}}, {{2}} placeholders
+  description   String?
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  messages      WhatsAppMessage[]
+}
+
+model WhatsAppMessage {
+  id                  String             @id @default(cuid())
+  clientId            String?
+  client              Client?            @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  templateId          String?
+  template            WhatsAppTemplate?  @relation(fields: [templateId], references: [id])
+  phone               String
+  direction           WhatsAppDirection  @default(OUTBOUND)
+  body                String
+  status              WhatsAppStatus     @default(QUEUED)
+  providerMessageId   String?
+  errorMessage        String?
+  scheduledFor        DateTime?
+  sentAt              DateTime?
+  deliveredAt         DateTime?
+  readAt              DateTime?
+  createdAt           DateTime           @default(now())
+
+  @@index([clientId, createdAt])
+  @@index([status])
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Courses (with prerequisite chains)
+// ──────────────────────────────────────────────────────────────────────────
+
+model Course {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  fee         Int       // INR
+  durationHours Int?
+  active      Boolean   @default(true)
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  prerequisites   CoursePrerequisite[] @relation("CoursePrereqs")
+  prerequisiteFor CoursePrerequisite[] @relation("CourseUnlocks")
+  enrollments     Enrollment[]
+}
+
+model CoursePrerequisite {
+  id              String  @id @default(cuid())
+  courseId        String  // the course that requires...
+  course          Course  @relation("CoursePrereqs", fields: [courseId], references: [id], onDelete: Cascade)
+  prerequisiteId  String  // ...this prerequisite
+  prerequisite    Course  @relation("CourseUnlocks", fields: [prerequisiteId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, prerequisiteId])
+}
+
+enum EnrollmentStatus {
+  PENDING_PAYMENT
+  ENROLLED
+  IN_PROGRESS
+  COMPLETED
+  DROPPED
+}
+
+model Enrollment {
+  id                   String           @id @default(cuid())
+  clientId             String
+  client               Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  courseId             String
+  course               Course           @relation(fields: [courseId], references: [id])
+  status               EnrollmentStatus @default(PENDING_PAYMENT)
+  feePaid              Int              @default(0)
+  creditsAdjustedAmount Int             @default(0) // prepaid healing credits credited to course fee
+  paymentId            String?          @unique
+  payment              Payment?         @relation("EnrollmentPayment", fields: [paymentId], references: [id])
+  enrolledAt           DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  @@unique([clientId, courseId])
+  @@index([status])
+}
