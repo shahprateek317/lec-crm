@@ -4,6 +4,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { authConfig } from "@/lib/auth.config";
 import type { Role } from "@prisma/client";
 
 declare module "next-auth" {
@@ -28,9 +29,8 @@ const credentialsSchema = z.object({
 });
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
   adapter: PrismaAdapter(prisma),
-  session: { strategy: "jwt" },
-  pages: { signIn: "/sign-in" },
   providers: [
     Credentials({
       name: "Email + Password",
@@ -51,30 +51,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        (token as { uid?: string }).uid = user.id;
-        (token as { role?: Role }).role = (user as { role?: Role }).role;
-      }
-      return token;
-    },
-    async session({ session, token }) {
-      const t = token as { uid?: string; role?: Role };
-      if (t.uid && session.user) {
-        session.user.id = t.uid;
-        session.user.role = t.role ?? "COORDINATOR";
-      }
-      return session;
-    },
-    authorized({ auth, request }) {
-      const publicPaths = ["/", "/sign-in", "/enquiry", "/api/enquiry", "/dev/pay"];
-      const { pathname } = request.nextUrl;
-      if (publicPaths.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
-        return true;
-      }
-      if (pathname.startsWith("/api/webhook")) return true;
-      return !!auth;
-    },
-  },
 });
