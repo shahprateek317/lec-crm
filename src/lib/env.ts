@@ -22,3 +22,10 @@ const schema = z.object({
 });
 
 export const env = schema.parse(process.env);
+
+// Force the process timezone to IST regardless of host. Vercel reserves TZ
+// as an env var, so we set it programmatically on first import. Must run
+// before any date is formatted.
+if (process.env.TZ !== "Asia/Kolkata") {
+  process.env.TZ = "Asia/Kolkata";
+}
