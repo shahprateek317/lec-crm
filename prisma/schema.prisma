@@ -106,16 +106,67 @@ enum PipelineStage {
   LOST
 }
 
+// Structured enquiry-form options per the centre's proposed form.
+// Free-text fields (area, issue, issueDuration) kept for backwards
+// compatibility and for the "Other" / "Specify" fallbacks.
+
+enum AgeBucket {
+  UNDER_18
+  AGE_18_25
+  AGE_26_40
+  AGE_41_60
+  AGE_60_PLUS
+}
+
+enum AreaCategory {
+  NEW_TOWN
+  SALT_LAKE
+  RAJARHAT
+  DUMDUM
+  BARASAT
+  OTHER_KOLKATA
+  OUTSIDE_KOLKATA
+}
+
+enum IssueCategory {
+  STRESS_ANXIETY
+  PHYSICAL_HEALTH
+  EMOTIONAL
+  RELATIONSHIP
+  FINANCIAL
+  WELLBEING
+  OTHER
+}
+
+enum DurationBucket {
+  DAYS
+  WEEKS
+  MONTHS
+  OVER_YEAR
+}
+
+enum PreferredTimeSlot {
+  MORNING
+  AFTERNOON
+  EVENING
+  WEEKEND
+}
+
 model Client {
   id               String         @id @default(cuid())
   name             String
   phone            String         @unique
   email            String?
   age              Int?
-  area             String?
-  issue            String?
-  issueRefined     String?
-  issueDuration    String?
+  ageBucket        AgeBucket?
+  area             String?        // free-text: either the picked area or the "specify" fallback
+  areaCategory     AreaCategory?
+  issue            String?        // free-text brief
+  issueCategory    IssueCategory?
+  issueRefined     String?        // post-counselling refinement
+  issueDuration    String?        // free text
+  durationBucket   DurationBucket?
+  preferredTimeSlot PreferredTimeSlot?
   severity         Int?           // 1-10
   source           LeadSource     @default(MANUAL)
   stage            PipelineStage  @default(NEW)

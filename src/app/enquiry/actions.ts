@@ -8,14 +8,19 @@ export async function submitEnquiry(formData: FormData) {
   const parsed = leadInputSchema.safeParse({
     name: raw.name,
     phone: raw.phone,
-    age: raw.age || undefined,
+    ageBucket: raw.ageBucket || undefined,
+    areaCategory: raw.areaCategory || undefined,
     area: raw.area || undefined,
+    issueCategory: raw.issueCategory || undefined,
     issue: raw.issue || undefined,
-    issueDuration: raw.issueDuration || undefined,
+    durationBucket: raw.durationBucket || undefined,
+    preferredTimeSlot: raw.preferredTimeSlot || undefined,
     source: raw.source || "MANUAL",
   });
   if (!parsed.success) {
-    const msg = encodeURIComponent(parsed.error.issues[0]?.message ?? "Please check the form and try again.");
+    const msg = encodeURIComponent(
+      parsed.error.issues[0]?.message ?? "Please check the form and try again.",
+    );
     redirect(`/enquiry?error=${msg}`);
   }
   await createLead(parsed.data);

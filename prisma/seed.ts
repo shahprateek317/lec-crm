@@ -11,11 +11,14 @@ async function main() {
   console.log("Seeding Life Energy Centre CRM…");
 
   // ── Staff ────────────────────────────────────────────────────────────
+  // Mobile-friendly credentials for the demo. Short email, no symbols in
+  // password. Password is the same across all four so it's easy to remember;
+  // roles are differentiated by the email only.
   const staff: Array<{ email: string; name: string; role: "ADMIN" | "COORDINATOR" | "COUNSELLOR" | "HEALER"; password: string }> = [
-    { email: "admin@lifeenergycentre.local", name: "Admin", role: "ADMIN", password: "admin@lec1" },
-    { email: "coordinator@lifeenergycentre.local", name: "Coordinator", role: "COORDINATOR", password: "coord@lec1" },
-    { email: "counsellor@lifeenergycentre.local", name: "Counsellor", role: "COUNSELLOR", password: "couns@lec1" },
-    { email: "healer@lifeenergycentre.local", name: "Healer", role: "HEALER", password: "heal@lec1" },
+    { email: "admin@lec.app",       name: "Admin",       role: "ADMIN",       password: "demo1234" },
+    { email: "coordinator@lec.app", name: "Coordinator", role: "COORDINATOR", password: "demo1234" },
+    { email: "counsellor@lec.app",  name: "Counsellor",  role: "COUNSELLOR",  password: "demo1234" },
+    { email: "healer@lec.app",      name: "Healer",      role: "HEALER",      password: "demo1234" },
   ];
   for (const s of staff) {
     const passwordHash = await bcrypt.hash(s.password, 10);

@@ -8,16 +8,32 @@ import { getWhatsAppProvider } from "@/lib/providers/whatsapp";
 import type { LeadSource, PipelineStage } from "@prisma/client";
 
 export const leadInputSchema = z.object({
-  name: z.string().trim().min(2, "Name is too short"),
+  name: z
+    .string()
+    .trim()
+    .min(2, "Name is too short")
+    .max(50, "Name is too long")
+    .regex(/^[A-Za-z\s.'-]+$/, "Alphabets only"),
   phone: z
     .string()
     .trim()
     .regex(/^[+\d][\d\s\-]{7,}$/, "Enter a valid phone number"),
   email: z.string().email().optional().or(z.literal("")),
   age: z.coerce.number().int().positive().max(120).optional(),
+  ageBucket: z
+    .enum(["UNDER_18", "AGE_18_25", "AGE_26_40", "AGE_41_60", "AGE_60_PLUS"])
+    .optional(),
   area: z.string().trim().max(120).optional(),
+  areaCategory: z
+    .enum(["NEW_TOWN", "SALT_LAKE", "RAJARHAT", "DUMDUM", "BARASAT", "OTHER_KOLKATA", "OUTSIDE_KOLKATA"])
+    .optional(),
   issue: z.string().trim().max(2000).optional(),
+  issueCategory: z
+    .enum(["STRESS_ANXIETY", "PHYSICAL_HEALTH", "EMOTIONAL", "RELATIONSHIP", "FINANCIAL", "WELLBEING", "OTHER"])
+    .optional(),
   issueDuration: z.string().trim().max(120).optional(),
+  durationBucket: z.enum(["DAYS", "WEEKS", "MONTHS", "OVER_YEAR"]).optional(),
+  preferredTimeSlot: z.enum(["MORNING", "AFTERNOON", "EVENING", "WEEKEND"]).optional(),
   source: z
     .enum(["FACEBOOK", "INSTAGRAM", "WHATSAPP", "WALK_IN", "REFERRAL", "MANUAL", "OTHER"])
     .default("MANUAL"),
@@ -59,9 +75,14 @@ export async function createLead(input: LeadInput, opts: { silent?: boolean } = 
       phone,
       email: parsed.email || null,
       age: parsed.age,
+      ageBucket: parsed.ageBucket,
       area: parsed.area,
+      areaCategory: parsed.areaCategory,
       issue: parsed.issue,
+      issueCategory: parsed.issueCategory,
       issueDuration: parsed.issueDuration,
+      durationBucket: parsed.durationBucket,
+      preferredTimeSlot: parsed.preferredTimeSlot,
       source: parsed.source as LeadSource,
       stage: "NEW" as PipelineStage,
       assignedToId: parsed.assignedToId,
