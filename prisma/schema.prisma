@@ -93,6 +93,18 @@ enum LeadSource {
   OTHER
 }
 
+// Key-value app configuration, editable by Admin role via /settings.
+// Lets the centre owner manage WhatsApp + Razorpay credentials without
+// engineer involvement. Sensitive values are AES-GCM encrypted at rest.
+model AppSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String   // plaintext or base64(iv || ciphertext || authTag) when encrypted
+  encrypted   Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+}
+
 enum PipelineStage {
   NEW
   CONTACTED

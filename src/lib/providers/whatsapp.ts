@@ -2,9 +2,13 @@
 // In dev: stub. In production: Meta WhatsApp Cloud API.
 // Groups are NOT part of this interface — the Business API doesn't support
 // programmatic group creation. Groups are created manually; we only track them.
+//
+// Config precedence: AppSetting (DB) > env var > "stub" default. This means
+// the centre owner can wire the WhatsApp credentials from the admin UI at
+// /settings/whatsapp without any engineer touching env vars.
 
-import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
+import { getSetting, SETTING_KEYS } from "@/lib/settings";
 import type {
   WhatsAppMessage,
   WhatsAppStatus,
@@ -74,14 +78,17 @@ async function recordMessage(params: {
   });
 }
 
-// ── Stub implementation (local dev) ───────────────────────────────────
-// Pretends to send, logs to console, records in DB, returns fake ID.
+function normalizePhone(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  return digits.startsWith("91") || digits.length >= 11 ? digits : `91${digits}`;
+}
+
+// ── Stub implementation (local dev / demo) ───────────────────────────
 class StubWhatsAppProvider implements WhatsAppProvider {
   async sendTemplate(input: SendTemplateInput): Promise<SendResult> {
     const tpl = await loadTemplate(input.templateName);
     const body = renderTemplate(tpl, input.variables ?? []);
     const providerMessageId = `stub_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    // eslint-disable-next-line no-console
     console.log(`[WhatsApp STUB] → ${input.phone}\n${body}\n`);
     await recordMessage({
       clientId: input.clientId,
@@ -96,7 +103,6 @@ class StubWhatsAppProvider implements WhatsAppProvider {
 
   async sendText(input: SendTextInput): Promise<SendResult> {
     const providerMessageId = `stub_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    // eslint-disable-next-line no-console
     console.log(`[WhatsApp STUB] → ${input.phone}\n${input.body}\n`);
     await recordMessage({
       clientId: input.clientId,
@@ -110,23 +116,20 @@ class StubWhatsAppProvider implements WhatsAppProvider {
 }
 
 // ── Meta Cloud API implementation (production) ────────────────────────
-// Uses POST https://graph.facebook.com/v21.0/{phoneNumberId}/messages
 class MetaWhatsAppProvider implements WhatsAppProvider {
-  private endpoint(): string {
-    const id = env.WHATSAPP_PHONE_NUMBER_ID;
-    if (!id) throw new Error("WHATSAPP_PHONE_NUMBER_ID missing");
-    return `https://graph.facebook.com/v21.0/${id}/messages`;
-  }
-
-  private normalize(phone: string): string {
-    const digits = phone.replace(/\D/g, "");
-    return digits.startsWith("91") || digits.length >= 11 ? digits : `91${digits}`;
+  private async endpointAndToken(): Promise<{ endpoint: string; token: string }> {
+    const [phoneId, token] = await Promise.all([
+      getSetting(SETTING_KEYS.whatsappPhoneId),
+      getSetting(SETTING_KEYS.whatsappToken),
+    ]);
+    if (!phoneId) throw new Error("whatsapp.phone_number_id is not configured");
+    if (!token) throw new Error("whatsapp.access_token is not configured");
+    return { endpoint: `https://graph.facebook.com/v21.0/${phoneId}/messages`, token };
   }
 
   private async post(payload: unknown): Promise<{ messageId: string | null; raw: unknown }> {
-    const token = env.WHATSAPP_ACCESS_TOKEN;
-    if (!token) throw new Error("WHATSAPP_ACCESS_TOKEN missing");
-    const res = await fetch(this.endpoint(), {
+    const { endpoint, token } = await this.endpointAndToken();
+    const res = await fetch(endpoint, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -136,9 +139,7 @@ class MetaWhatsAppProvider implements WhatsAppProvider {
     });
     const raw = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(
-        `WhatsApp send failed (${res.status}): ${JSON.stringify(raw)}`,
-      );
+      throw new Error(`WhatsApp send failed (${res.status}): ${JSON.stringify(raw)}`);
     }
     const messageId =
       (raw as { messages?: Array<{ id?: string }> }).messages?.[0]?.id ?? null;
@@ -151,16 +152,13 @@ class MetaWhatsAppProvider implements WhatsAppProvider {
     try {
       const { messageId } = await this.post({
         messaging_product: "whatsapp",
-        to: this.normalize(input.phone),
+        to: normalizePhone(input.phone),
         type: "template",
         template: {
           name: tpl.name,
           language: { code: tpl.language },
           components: input.variables?.length
-            ? [{
-                type: "body",
-                parameters: input.variables.map((text) => ({ type: "text", text })),
-              }]
+            ? [{ type: "body", parameters: input.variables.map((text) => ({ type: "text", text })) }]
             : undefined,
         },
       });
@@ -192,7 +190,7 @@ class MetaWhatsAppProvider implements WhatsAppProvider {
     try {
       const { messageId } = await this.post({
         messaging_product: "whatsapp",
-        to: this.normalize(input.phone),
+        to: normalizePhone(input.phone),
         type: "text",
         text: { body: input.body, preview_url: false },
       });
@@ -219,11 +217,47 @@ class MetaWhatsAppProvider implements WhatsAppProvider {
   }
 }
 
-let _provider: WhatsAppProvider | null = null;
+async function resolveProvider(): Promise<WhatsAppProvider> {
+  const provider = await getSetting(SETTING_KEYS.whatsappProvider);
+  return provider === "meta" ? new MetaWhatsAppProvider() : new StubWhatsAppProvider();
+}
+
+/**
+ * Returns a WhatsAppProvider facade. Methods resolve the underlying provider
+ * (stub vs meta) from DB settings at call time, so admin can switch at
+ * runtime without a redeploy. Signature stays synchronous so existing
+ * callers don't need to change.
+ */
 export function getWhatsAppProvider(): WhatsAppProvider {
-  if (_provider) return _provider;
-  _provider = env.WHATSAPP_PROVIDER === "meta"
-    ? new MetaWhatsAppProvider()
-    : new StubWhatsAppProvider();
-  return _provider;
+  return {
+    sendTemplate: async (input) => (await resolveProvider()).sendTemplate(input),
+    sendText:     async (input) => (await resolveProvider()).sendText(input),
+  };
+}
+
+/** Directly test Meta credentials by pinging the phone-number endpoint. */
+export async function testWhatsAppCredentials(): Promise<{ ok: boolean; detail: string }> {
+  const [phoneId, token] = await Promise.all([
+    getSetting(SETTING_KEYS.whatsappPhoneId),
+    getSetting(SETTING_KEYS.whatsappToken),
+  ]);
+  if (!phoneId) return { ok: false, detail: "Phone Number ID is not set." };
+  if (!token) return { ok: false, detail: "Access Token is not set." };
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/v21.0/${phoneId}?fields=display_phone_number,verified_name`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { ok: false, detail: (body as { error?: { message?: string } }).error?.message ?? `HTTP ${res.status}` };
+    }
+    const data = body as { display_phone_number?: string; verified_name?: string };
+    return {
+      ok: true,
+      detail: `Connected as ${data.verified_name ?? "(no name)"} (${data.display_phone_number ?? phoneId})`,
+    };
+  } catch (err) {
+    return { ok: false, detail: err instanceof Error ? err.message : "Unknown error" };
+  }
 }

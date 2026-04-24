@@ -7,8 +7,8 @@
 // Verify token must match WHATSAPP_VERIFY_TOKEN in .env.local.
 
 import { NextResponse } from "next/server";
-import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
+import { getSetting, SETTING_KEYS } from "@/lib/settings";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -16,7 +16,8 @@ export async function GET(req: Request) {
   const token = searchParams.get("hub.verify_token");
   const challenge = searchParams.get("hub.challenge");
 
-  if (mode === "subscribe" && token && token === env.WHATSAPP_VERIFY_TOKEN) {
+  const expected = await getSetting(SETTING_KEYS.whatsappVerifyToken);
+  if (mode === "subscribe" && token && expected && token === expected) {
     return new Response(challenge ?? "", { status: 200 });
   }
   return NextResponse.json({ error: "forbidden" }, { status: 403 });

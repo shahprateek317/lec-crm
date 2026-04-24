@@ -1,0 +1,144 @@
+// Admin-editable configuration persisted to DB. Used for integration
+// credentials (WhatsApp, Razorpay) so the centre owner can manage secrets
+// without an engineer.
+//
+// Precedence when reading: DB setting > env var > default.
+// Sensitive values are encrypted with AES-256-GCM using a key derived from
+// AUTH_SECRET. If AUTH_SECRET rotates, encrypted values become unrecoverable
+// and admin will need to re-paste them.
+
+import crypto from "node:crypto";
+import { prisma } from "@/lib/prisma";
+import { env } from "@/lib/env";
+
+// ── Encryption ────────────────────────────────────────────────────────
+function key(): Buffer {
+  return crypto.createHash("sha256").update(env.AUTH_SECRET).digest();
+}
+
+function encrypt(plaintext: string): string {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key(), iv);
+  const enc = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return Buffer.concat([iv, enc, tag]).toString("base64");
+}
+
+function decrypt(b64: string): string {
+  const buf = Buffer.from(b64, "base64");
+  const iv = buf.subarray(0, 12);
+  const tag = buf.subarray(buf.length - 16);
+  const enc = buf.subarray(12, buf.length - 16);
+  const decipher = crypto.createDecipheriv("aes-256-gcm", key(), iv);
+  decipher.setAuthTag(tag);
+  const dec = Buffer.concat([decipher.update(enc), decipher.final()]);
+  return dec.toString("utf8");
+}
+
+// ── Setting keys ──────────────────────────────────────────────────────
+export const SETTING_KEYS = {
+  whatsappProvider:    "whatsapp.provider",
+  whatsappPhoneId:     "whatsapp.phone_number_id",
+  whatsappToken:       "whatsapp.access_token",
+  whatsappVerifyToken: "whatsapp.verify_token",
+
+  razorpayProvider:     "razorpay.provider",
+  razorpayKeyId:        "razorpay.key_id",
+  razorpayKeySecret:    "razorpay.key_secret",
+  razorpayWebhookSecret: "razorpay.webhook_secret",
+} as const;
+
+export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
+
+export const SENSITIVE_KEYS: ReadonlySet<SettingKey> = new Set([
+  SETTING_KEYS.whatsappToken,
+  SETTING_KEYS.whatsappVerifyToken,
+  SETTING_KEYS.razorpayKeySecret,
+  SETTING_KEYS.razorpayWebhookSecret,
+]);
+
+// ── Env fallbacks ─────────────────────────────────────────────────────
+const ENV_FALLBACK: Partial<Record<SettingKey, string | undefined>> = {
+  [SETTING_KEYS.whatsappProvider]:    env.WHATSAPP_PROVIDER,
+  [SETTING_KEYS.whatsappPhoneId]:     env.WHATSAPP_PHONE_NUMBER_ID,
+  [SETTING_KEYS.whatsappToken]:       env.WHATSAPP_ACCESS_TOKEN,
+  [SETTING_KEYS.whatsappVerifyToken]: env.WHATSAPP_VERIFY_TOKEN,
+  [SETTING_KEYS.razorpayProvider]:     env.RAZORPAY_PROVIDER,
+  [SETTING_KEYS.razorpayKeyId]:        env.RAZORPAY_KEY_ID,
+  [SETTING_KEYS.razorpayKeySecret]:    env.RAZORPAY_KEY_SECRET,
+  [SETTING_KEYS.razorpayWebhookSecret]: env.RAZORPAY_WEBHOOK_SECRET,
+};
+
+// ── Read / write ──────────────────────────────────────────────────────
+/** Returns the effective value: DB setting (decrypted) > env > undefined. */
+export async function getSetting(key: SettingKey): Promise<string | undefined> {
+  const row = await prisma.appSetting.findUnique({ where: { key } });
+  if (row) {
+    try {
+      return row.encrypted ? decrypt(row.value) : row.value;
+    } catch (err) {
+      console.error(`[settings] failed to decrypt ${key}`, err);
+      // Fall through to env as a last resort.
+    }
+  }
+  return ENV_FALLBACK[key] || undefined;
+}
+
+export async function getSettings(keys: SettingKey[]): Promise<Partial<Record<SettingKey, string>>> {
+  const rows = await prisma.appSetting.findMany({ where: { key: { in: keys } } });
+  const out: Partial<Record<SettingKey, string>> = {};
+  for (const k of keys) {
+    const row = rows.find((r) => r.key === k);
+    let v: string | undefined;
+    if (row) {
+      try { v = row.encrypted ? decrypt(row.value) : row.value; } catch {}
+    }
+    out[k] = v ?? ENV_FALLBACK[k];
+  }
+  return out;
+}
+
+/** Returns metadata + masked preview for admin UI (never returns secret plaintext). */
+export async function getSettingPreview(key: SettingKey): Promise<{
+  isSet: boolean;
+  source: "db" | "env" | "none";
+  preview: string;
+}> {
+  const row = await prisma.appSetting.findUnique({ where: { key } });
+  const envVal = ENV_FALLBACK[key] || undefined;
+  let value: string | undefined;
+  let source: "db" | "env" | "none" = "none";
+  if (row) {
+    try {
+      value = row.encrypted ? decrypt(row.value) : row.value;
+      source = "db";
+    } catch { /* falls through */ }
+  }
+  if (!value && envVal) {
+    value = envVal;
+    source = "env";
+  }
+  if (!value) return { isSet: false, source, preview: "" };
+  if (SENSITIVE_KEYS.has(key)) {
+    return { isSet: true, source, preview: "••••••" + value.slice(-4) };
+  }
+  return { isSet: true, source, preview: value };
+}
+
+export async function setSetting(
+  key: SettingKey,
+  value: string,
+  updatedById?: string,
+): Promise<void> {
+  const isSensitive = SENSITIVE_KEYS.has(key);
+  const stored = isSensitive ? encrypt(value) : value;
+  await prisma.appSetting.upsert({
+    where: { key },
+    create: { key, value: stored, encrypted: isSensitive, updatedById },
+    update: { value: stored, encrypted: isSensitive, updatedById },
+  });
+}
+
+export async function clearSetting(key: SettingKey): Promise<void> {
+  await prisma.appSetting.deleteMany({ where: { key } });
+}
