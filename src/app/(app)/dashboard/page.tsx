@@ -1,10 +1,12 @@
 import Link from "next/link";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { STAGES, STAGE_TONE } from "@/lib/pipeline";
 import { StageBadge } from "@/components/leads/stage-badge";
 import { formatDistanceToNow, startOfMonth, subDays } from "date-fns";
 import type { PipelineStage } from "@prisma/client";
+import { t } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Dashboard" };
@@ -14,7 +16,37 @@ const HAPPY_PATH: PipelineStage[] = [
   "VISIT_SCHEDULED", "VISIT_DONE", "HEALING_ACTIVE", "CONVERTED",
 ];
 
+const ROLE_HINT: Record<string, { title: string; body: string; href: string; cta: string }> = {
+  ADMIN: {
+    title: "Admin view",
+    body: "You can set up staff, credit packages, courses and prerequisites from the Settings page.",
+    href: "/settings",
+    cta: "Open settings",
+  },
+  COORDINATOR: {
+    title: "Coordinator view",
+    body: "New enquiries appear in Leads. Call clients, book counsellings, and keep follow-ups flowing.",
+    href: "/leads?stage=NEW",
+    cta: "New leads",
+  },
+  COUNSELLOR: {
+    title: "Counsellor view",
+    body: "Your scheduled counsellings and today's sessions are in Counselling & Visits.",
+    href: "/schedule?view=today",
+    cta: "Today's schedule",
+  },
+  HEALER: {
+    title: "Healer view",
+    body: "Healing sessions and distant-healing updates are where you spend your day.",
+    href: "/healing",
+    cta: "Healing sessions",
+  },
+};
+
 export default async function DashboardPage() {
+  const session = await auth();
+  const role = session?.user.role ?? "COORDINATOR";
+  const hint = ROLE_HINT[role] ?? ROLE_HINT.COORDINATOR;
   const monthStart = startOfMonth(new Date());
   const thirtyDaysAgo = subDays(new Date(), 30);
 
@@ -76,21 +108,36 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <header className="flex items-baseline justify-between">
-        <div>
-          <h1 className="font-serif text-3xl font-medium tracking-tight">Dashboard</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            A gentle overview of the centre's activity.
-          </p>
+      <header className="space-y-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {hint.title}
+            </p>
+            <h1 className="mt-1 font-serif text-3xl font-medium tracking-tight">
+              Welcome, {session?.user.name?.split(" ")[0] ?? "there"}
+            </h1>
+            <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+              {hint.body}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href={hint.href}
+              className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+            >
+              {hint.cta} →
+            </Link>
+            {openFollowUps > 0 && (
+              <Link
+                href="/follow-ups"
+                className="inline-flex h-9 items-center gap-2 rounded-lg bg-amber-100 px-3 text-sm font-medium text-amber-900 transition-colors hover:bg-amber-200"
+              >
+                {openFollowUps} follow-up{openFollowUps === 1 ? "" : "s"} due
+              </Link>
+            )}
+          </div>
         </div>
-        {openFollowUps > 0 && (
-          <Link
-            href="/follow-ups"
-            className="inline-flex h-9 items-center gap-2 rounded-lg bg-amber-100 px-3 text-sm font-medium text-amber-900 transition-colors hover:bg-amber-200"
-          >
-            {openFollowUps} follow-up{openFollowUps === 1 ? "" : "s"} due
-          </Link>
-        )}
       </header>
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
