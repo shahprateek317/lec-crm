@@ -140,6 +140,46 @@ export default async function DashboardPage() {
         </div>
       </header>
 
+      {role === "ADMIN" && (
+        <section>
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Set up your centre
+          </p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Link
+              href="/settings/users"
+              className="group rounded-xl border border-border bg-card p-4 transition-colors hover:bg-muted/40"
+            >
+              <p className="font-medium">Staff accounts</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Add healers, counsellors, coordinators. Set roles and enable/disable.
+              </p>
+              <p className="mt-2 text-xs text-primary group-hover:underline">Manage →</p>
+            </Link>
+            <Link
+              href="/settings/packages"
+              className="group rounded-xl border border-border bg-card p-4 transition-colors hover:bg-muted/40"
+            >
+              <p className="font-medium">Credit packages</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Healing charges — amounts &amp; credits granted per package.
+              </p>
+              <p className="mt-2 text-xs text-primary group-hover:underline">Manage →</p>
+            </Link>
+            <Link
+              href="/settings/courses"
+              className="group rounded-xl border border-border bg-card p-4 transition-colors hover:bg-muted/40"
+            >
+              <p className="font-medium">Courses</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Fees, descriptions, and prerequisite chains.
+              </p>
+              <p className="mt-2 text-xs text-primary group-hover:underline">Manage →</p>
+            </Link>
+          </div>
+        </section>
+      )}
+
       <section className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
         {metrics.map((m) => (
           <Card key={m.label} className="rounded-xl">
