@@ -32,6 +32,8 @@ export const authConfig = {
       if (publicPaths.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
         return true;
       }
+      // NextAuth's own endpoints (csrf, signin, callback, session, providers) must be public.
+      if (pathname.startsWith("/api/auth")) return true;
       if (pathname.startsWith("/api/webhook")) return true;
       return !!auth;
     },
