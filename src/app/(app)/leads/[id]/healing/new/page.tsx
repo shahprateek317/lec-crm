@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { ChevronLeft, Sparkles } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getCreditBalance } from "@/lib/credits";
+import { ChipMultiSelect } from "@/components/chip-multi-select";
+import { FlashToaster } from "@/components/flash-toaster";
 import { logHealingSessionAction } from "./actions";
 
 export const metadata = { title: "Log healing session" };
@@ -101,26 +103,12 @@ export default async function LogHealingPage({
 
         <div className="space-y-2">
           <label className="text-sm font-medium">Chakras worked on</label>
-          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-            {CHAKRAS.map((c) => (
-              <label key={c.value} className="flex items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted/40">
-                <input type="checkbox" name="chakras" value={c.value} className="h-4 w-4" />
-                {c.label}
-              </label>
-            ))}
-          </div>
+          <ChipMultiSelect name="chakras" options={CHAKRAS.map((c) => ({ value: c.value, label: c.label }))} ariaLabel="Chakras" />
         </div>
 
         <div className="space-y-2">
           <label className="text-sm font-medium">Colours of prana used (optional)</label>
-          <div className="grid grid-cols-3 gap-1.5">
-            {COLORS.map((c) => (
-              <label key={c.value} className="flex items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted/40">
-                <input type="checkbox" name="colorsUsed" value={c.value} className="h-4 w-4" />
-                {c.label}
-              </label>
-            ))}
-          </div>
+          <ChipMultiSelect name="colorsUsed" options={COLORS.map((c) => ({ value: c.value, label: c.label }))} ariaLabel="Pranic colours" />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -185,11 +173,7 @@ export default async function LogHealingPage({
           {balance <= 0 && <span className="text-xs text-destructive">(no credits — uncheck for complimentary)</span>}
         </label>
 
-        {sp.error && (
-          <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {decodeURIComponent(sp.error)}
-          </p>
-        )}
+        <FlashToaster />
 
         <div className="flex items-center gap-3">
           <button type="submit" className="inline-flex h-11 items-center justify-center rounded-lg bg-primary px-6 font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90">

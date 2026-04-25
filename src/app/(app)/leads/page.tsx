@@ -3,8 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { STAGES, STAGE_TONE } from "@/lib/pipeline";
 import { StageBadge } from "@/components/leads/stage-badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/empty-state";
 import { formatDistanceToNow } from "date-fns";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Users, X } from "lucide-react";
 import type { PipelineStage, Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -58,6 +59,27 @@ export default async function LeadsPage({
   ]);
 
   const countByStage = new Map(stageCounts.map((s) => [s.stage, s._count._all]));
+
+  // Compose a chip for each active filter that's clickable to remove that one.
+  const activeChips: Array<{ label: string; href: string }> = [];
+  const without = (k: keyof Query) => {
+    const next: Record<string, string> = {};
+    if (sp.q && k !== "q") next.q = sp.q;
+    if (sp.stage && k !== "stage") next.stage = sp.stage;
+    if (sp.assignee && k !== "assignee") next.assignee = sp.assignee;
+    const qs = new URLSearchParams(next).toString();
+    return qs ? `/leads?${qs}` : "/leads";
+  };
+  if (sp.q) activeChips.push({ label: `Search: "${sp.q}"`, href: without("q") });
+  if (sp.stage && STAGES.includes(sp.stage as PipelineStage)) {
+    activeChips.push({ label: `Stage: ${STAGE_TONE[sp.stage as PipelineStage].label}`, href: without("stage") });
+  }
+  if (sp.assignee === "unassigned") {
+    activeChips.push({ label: "Unassigned", href: without("assignee") });
+  } else if (sp.assignee) {
+    const a = staff.find((s) => s.id === sp.assignee);
+    if (a) activeChips.push({ label: `Assigned: ${a.name}`, href: without("assignee") });
+  }
 
   return (
     <div className="space-y-6">
@@ -122,22 +144,45 @@ export default async function LeadsPage({
         >
           Apply
         </button>
-        {(sp.q || sp.stage || sp.assignee) && (
-          <Link
-            href="/leads"
-            className="text-sm text-muted-foreground hover:text-foreground"
-          >
-            Clear
-          </Link>
-        )}
       </form>
+
+      {activeChips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">Filters:</span>
+          {activeChips.map((c) => (
+            <Link
+              key={c.label}
+              href={c.href}
+              className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/15"
+            >
+              {c.label}
+              <X className="h-3 w-3" />
+            </Link>
+          ))}
+          <Link href="/leads" className="text-xs text-muted-foreground hover:text-foreground">
+            Clear all
+          </Link>
+        </div>
+      )}
 
       <Card className="rounded-xl">
         <CardContent className="divide-y divide-border p-0">
           {leads.length === 0 && (
-            <div className="p-10 text-center text-sm text-muted-foreground">
-              No leads match these filters.
-            </div>
+            activeChips.length > 0 ? (
+              <EmptyState
+                icon={<Search className="h-5 w-5" />}
+                title="No leads match these filters"
+                description="Try removing a filter, broadening the stage, or searching by phone number."
+                action={{ href: "/leads", label: "Clear filters" }}
+              />
+            ) : (
+              <EmptyState
+                icon={<Users className="h-5 w-5" />}
+                title="No leads yet"
+                description="Add a lead manually or share the public enquiry form so leads come in automatically."
+                action={{ href: "/leads/new", label: "Add the first lead" }}
+              />
+            )
           )}
           {leads.map((lead) => (
             <Link

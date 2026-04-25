@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { FlashToaster } from "@/components/flash-toaster";
 import { createCourseAction, updateCourseAction, addPrereqAction, removePrereqAction } from "./actions";
 
 export const metadata = { title: "Courses" };
@@ -40,12 +41,7 @@ export default async function CoursesSettingsPage({
         </p>
       </header>
 
-      {sp.ok && <p className="rounded-md bg-emerald-100 px-3 py-2 text-sm text-emerald-900">Saved.</p>}
-      {sp.error && (
-        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {decodeURIComponent(sp.error)}
-        </p>
-      )}
+      <FlashToaster />
 
       <Card className="rounded-xl">
         <CardContent className="p-6">

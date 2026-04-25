@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { FlashToaster } from "@/components/flash-toaster";
 import { getSettingPreview, SETTING_KEYS } from "@/lib/settings";
 import { saveRazorpayAction, testRazorpayAction, regenerateWebhookSecretAction } from "./actions";
 
@@ -61,17 +62,7 @@ export default async function RazorpaySettingsPage({
         </span>
       </div>
 
-      {sp.ok && <p className="rounded-md bg-emerald-100 px-3 py-2 text-sm text-emerald-900">Saved.</p>}
-      {sp.error && (
-        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {decodeURIComponent(sp.error)}
-        </p>
-      )}
-      {sp.test && (
-        <p className={`rounded-md px-3 py-2 text-sm ${sp.test.startsWith("ok") ? "bg-emerald-100 text-emerald-900" : "bg-destructive/10 text-destructive"}`}>
-          {decodeURIComponent(sp.test.replace(/^(ok|err):/, ""))}
-        </p>
-      )}
+      <FlashToaster />
 
       <Card className="rounded-xl">
         <CardHeader className="pb-3">

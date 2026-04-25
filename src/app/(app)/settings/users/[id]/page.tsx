@@ -7,7 +7,14 @@ import { prisma } from "@/lib/prisma";
 import { ensureProfile } from "@/lib/users";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AvailabilityGrid } from "@/components/availability-grid";
+import { ChipMultiSelect } from "@/components/chip-multi-select";
+import { TagInput } from "@/components/tag-input";
+import { FlashToaster } from "@/components/flash-toaster";
 import { t } from "@/lib/i18n";
+
+const LANGUAGE_SUGGESTIONS = ["English", "Hindi", "Bengali", "Tamil", "Telugu", "Marathi", "Gujarati", "Punjabi", "Odia", "Urdu"];
+const HEALER_FOCUS_SUGGESTIONS = ["Stress", "Anxiety", "Back pain", "Sleep", "Depression support", "Energy cleansing", "Relationship", "Financial blocks", "General healing", "Headaches", "Joint pain"];
+const COUNSELLOR_SPECIALIZATION_SUGGESTIONS = ["Stress", "Anxiety", "Emotional healing", "Relationship", "Financial", "Spiritual guidance", "Grief", "Career", "Family"];
 import {
   updateUserBasicsAction,
   updateHealerProfileAction,
@@ -94,12 +101,7 @@ export default async function UserDetailPage({
         </p>
       </header>
 
-      {sp.ok && <p className="rounded-md bg-emerald-100 px-3 py-2 text-sm text-emerald-900">Saved.</p>}
-      {sp.error && (
-        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {decodeURIComponent(sp.error)}
-        </p>
-      )}
+      <FlashToaster />
 
       {/* ── Basic details ── */}
       <Card className="rounded-xl">
@@ -190,12 +192,17 @@ export default async function UserDetailPage({
                   <Field id="experienceYears" label="Years of healing experience">
                     <input id="experienceYears" name="experienceYears" type="number" min={0} defaultValue={healer.experienceYears ?? ""} className={inputCls} />
                   </Field>
-                  <Field id="languages" label="Languages (comma-separated)">
-                    <input id="languages" name="languages" defaultValue={healer.languages.join(", ")} className={inputCls} placeholder="English, Hindi, Bengali" />
+                  <Field id="languages" label="Languages">
+                    <TagInput name="languages" defaultValue={healer.languages} suggestions={LANGUAGE_SUGGESTIONS} placeholder="Type a language and press Enter" />
                   </Field>
                 </div>
-                <Field label="PH levels (multi-select)">
-                  <CheckboxGrid name="phLevels" options={PH_LEVEL_OPTIONS} selected={healer.phLevels as string[]} />
+                <Field label="PH levels">
+                  <ChipMultiSelect
+                    name="phLevels"
+                    options={PH_LEVEL_OPTIONS.map((o) => ({ value: o.v, label: o.label }))}
+                    defaultSelected={healer.phLevels as string[]}
+                    ariaLabel="Pranic healing levels"
+                  />
                 </Field>
               </Section>
 
@@ -232,8 +239,8 @@ export default async function UserDetailPage({
                   <Toggle name="acceptsNewLeads"      label="New leads ok" defaultChecked={healer.acceptsNewLeads} />
                   <Toggle name="prefersRepeatClients" label="Prefers repeat clients" defaultChecked={healer.prefersRepeatClients} />
                 </div>
-                <Field id="focusAreas" label="Focus areas (comma-separated)">
-                  <input id="focusAreas" name="focusAreas" defaultValue={healer.focusAreas.join(", ")} className={inputCls} placeholder="Back pain, anxiety, sleep…" />
+                <Field id="focusAreas" label="Focus areas">
+                  <TagInput name="focusAreas" defaultValue={healer.focusAreas} suggestions={HEALER_FOCUS_SUGGESTIONS} placeholder="Back pain, anxiety, sleep…" />
                 </Field>
               </Section>
 
@@ -291,11 +298,11 @@ export default async function UserDetailPage({
                 <Field id="maxSessionsPerDay" label="Max sessions / day">
                   <input id="maxSessionsPerDay" name="maxSessionsPerDay" type="number" min={1} defaultValue={counsellor.maxSessionsPerDay ?? ""} className={inputCls} />
                 </Field>
-                <Field id="languages" label="Languages (comma-separated)">
-                  <input id="languages" name="languages" defaultValue={counsellor.languages.join(", ")} className={inputCls} />
+                <Field id="languages" label="Languages">
+                  <TagInput name="languages" defaultValue={counsellor.languages} suggestions={LANGUAGE_SUGGESTIONS} />
                 </Field>
-                <Field id="specializations" label="Specialisations (comma-separated)">
-                  <input id="specializations" name="specializations" defaultValue={counsellor.specializations.join(", ")} className={inputCls} placeholder="Stress, anxiety, relationships" />
+                <Field id="specializations" label="Specialisations">
+                  <TagInput name="specializations" defaultValue={counsellor.specializations} suggestions={COUNSELLOR_SPECIALIZATION_SUGGESTIONS} placeholder="Stress, anxiety, relationships" />
                 </Field>
               </div>
 
@@ -349,8 +356,8 @@ export default async function UserDetailPage({
                 <Field id="shiftTiming" label="Shift timing">
                   <input id="shiftTiming" name="shiftTiming" defaultValue={coordinator.shiftTiming ?? ""} placeholder="e.g. 10:00 – 18:00" className={inputCls} />
                 </Field>
-                <Field id="languages" label="Languages (comma-separated)">
-                  <input id="languages" name="languages" defaultValue={coordinator.languages.join(", ")} className={inputCls} />
+                <Field id="languages" label="Languages">
+                  <TagInput name="languages" defaultValue={coordinator.languages} suggestions={LANGUAGE_SUGGESTIONS} />
                 </Field>
               </div>
 
