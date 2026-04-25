@@ -23,6 +23,18 @@ const CHAKRAS = [
   { value: "BASIC", label: "Basic" },
 ] as const;
 
+const COLORS = [
+  { value: "WHITE",            label: "White" },
+  { value: "GREEN",            label: "Green" },
+  { value: "ORANGE",           label: "Orange" },
+  { value: "YELLOW",           label: "Yellow" },
+  { value: "BLUE",             label: "Blue" },
+  { value: "VIOLET",           label: "Violet" },
+  { value: "ELECTRIC_VIOLET",  label: "Electric Violet" },
+  { value: "GOLD",             label: "Gold" },
+  { value: "RED",              label: "Red" },
+] as const;
+
 export default async function LogHealingPage({
   params,
   searchParams,
@@ -99,6 +111,18 @@ export default async function LogHealingPage({
           </div>
         </div>
 
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Colours of prana used (optional)</label>
+          <div className="grid grid-cols-3 gap-1.5">
+            {COLORS.map((c) => (
+              <label key={c.value} className="flex items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted/40">
+                <input type="checkbox" name="colorsUsed" value={c.value} className="h-4 w-4" />
+                {c.label}
+              </label>
+            ))}
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <label htmlFor="process" className="text-sm font-medium">Process / technique</label>
@@ -132,6 +156,22 @@ export default async function LogHealingPage({
             className={`${inputCls} min-h-20 resize-y py-2`}
           />
         </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label htmlFor="clientResponse" className="text-sm font-medium">Client response</label>
+            <input id="clientResponse" name="clientResponse" placeholder="Quick note on what they said" className={inputCls} />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="nextSessionRecommendedAt" className="text-sm font-medium">Next session recommended on</label>
+            <input id="nextSessionRecommendedAt" name="nextSessionRecommendedAt" type="date" className={inputCls} />
+          </div>
+        </div>
+
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="followUpNeeded" value="true" className="h-4 w-4" />
+          Follow-up needed
+        </label>
 
         <label className="flex items-center gap-2 rounded-md bg-muted/40 p-3 text-sm">
           <input

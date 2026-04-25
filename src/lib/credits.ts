@@ -141,9 +141,15 @@ export const logHealingSchema = z.object({
       "SPLEEN_FRONT", "SPLEEN_BACK", "SEX", "BASIC",
     ]),
   ).default([]),
+  colorsUsed: z.array(
+    z.enum(["WHITE", "GREEN", "ORANGE", "YELLOW", "BLUE", "VIOLET", "RED", "ELECTRIC_VIOLET", "GOLD"]),
+  ).default([]),
   process: z.string().max(500).optional(),
   durationMinutes: z.coerce.number().int().positive().optional(),
   remarks: z.string().max(2000).optional(),
+  clientResponse: z.string().max(500).optional(),
+  followUpNeeded: z.boolean().default(false),
+  nextSessionRecommendedAt: z.coerce.date().optional(),
   creditUsed: z.boolean().default(true),
 });
 
@@ -162,9 +168,13 @@ export async function logHealingSession(input: z.infer<typeof logHealingSchema>)
         healerId: parsed.healerId,
         mode: parsed.mode,
         chakras: parsed.chakras as Chakra[],
+        colorsUsed: parsed.colorsUsed as Array<"WHITE" | "GREEN" | "ORANGE" | "YELLOW" | "BLUE" | "VIOLET" | "RED" | "ELECTRIC_VIOLET" | "GOLD">,
         process: parsed.process,
         durationMinutes: parsed.durationMinutes,
         remarks: parsed.remarks,
+        clientResponse: parsed.clientResponse,
+        followUpNeeded: parsed.followUpNeeded,
+        nextSessionRecommendedAt: parsed.nextSessionRecommendedAt,
         creditUsed: parsed.creditUsed,
       },
     });

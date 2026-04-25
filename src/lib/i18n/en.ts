@@ -44,10 +44,16 @@ export const en = {
       "A coordinator will message you on WhatsApp shortly. You're welcome to call us at the centre anytime.",
   },
   roles: {
+    SUPER_ADMIN: "Super Admin",
     ADMIN: "Admin",
     COORDINATOR: "Coordinator",
     COUNSELLOR: "Counsellor",
+    SENIOR_COUNSELLOR: "Senior Counsellor",
     HEALER: "Healer",
+    SENIOR_HEALER: "Senior Healer",
+    ACCOUNTS: "Accounts",
+    MARKETING_MANAGER: "Marketing Manager",
+    VIEWER: "Viewer",
   },
   stages: {
     NEW: "New lead",

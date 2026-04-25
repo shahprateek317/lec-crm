@@ -30,6 +30,94 @@ async function main() {
   }
   console.log(`  ✓ ${staff.length} staff accounts`);
 
+  // ── Sample role profiles ─────────────────────────────────────────────
+  // Populate the new role-specific profile rows so admin sees realistic
+  // defaults instead of empty forms.
+  const accountsByEmail = new Map((await prisma.user.findMany()).map(u => [u.email, u]));
+
+  const healer = accountsByEmail.get("healer@lec.app") ?? accountsByEmail.get("healer@lifeenergycentre.local");
+  if (healer) {
+    await prisma.healerProfile.upsert({
+      where: { userId: healer.id },
+      create: {
+        userId: healer.id,
+        experienceYears: 6,
+        phLevels: ["BPH", "APH", "PSYCHOTHERAPY"],
+        languages: ["English", "Bengali", "Hindi"],
+        acceptsInPerson: true,
+        acceptsDistant: true,
+        preferredTimeBands: ["MORNING", "EVENING"],
+        availableDays: ["MON", "TUE", "WED", "THU", "FRI", "SAT"],
+        maxHealingsPerDay: 6,
+        canVisitCentre: true,
+        homeVisitPossible: false,
+        acceptsDemoFree: true,
+        acceptsNewLeads: true,
+        focusAreas: ["Stress", "Back pain", "Anxiety", "Sleep"],
+        perSessionCharge: 500,
+        demoSessionCharge: 99,
+        revenueSharePercent: 60,
+        paymentMode: "UPI",
+        acceptsChildCases: true,
+        acceptsElderlyCases: true,
+        weekendAvailable: true,
+        groupHealingAvailable: false,
+      },
+      update: {},
+    });
+  }
+
+  const counsellor = accountsByEmail.get("counsellor@lec.app") ?? accountsByEmail.get("counsellor@lifeenergycentre.local");
+  if (counsellor) {
+    await prisma.counsellorProfile.upsert({
+      where: { userId: counsellor.id },
+      create: {
+        userId: counsellor.id,
+        experienceYears: 4,
+        languages: ["English", "Bengali", "Hindi"],
+        specializations: ["Stress", "Anxiety", "Emotional healing", "Spiritual guidance"],
+        acceptsOnline: true,
+        acceptsOffline: true,
+        preferredTimeBands: ["MORNING", "AFTERNOON"],
+        maxSessionsPerDay: 5,
+        canCloseLead: false,
+        canAssignVisit: true,
+        canOffer99Program: true,
+        incentiveEligible: true,
+      },
+      update: {},
+    });
+  }
+
+  const coordinator = accountsByEmail.get("coordinator@lec.app") ?? accountsByEmail.get("coordinator@lifeenergycentre.local");
+  if (coordinator) {
+    await prisma.coordinatorProfile.upsert({
+      where: { userId: coordinator.id },
+      create: {
+        userId: coordinator.id,
+        handlesLeads: true,
+        handlesFollowUp: true,
+        handlesWhatsAppGroups: true,
+        handlesPaymentFollowUp: true,
+        handlesScheduling: true,
+        maxCallsPerDay: 40,
+        shiftTiming: "10:00 – 18:00",
+        languages: ["English", "Bengali", "Hindi"],
+      },
+      update: {},
+    });
+  }
+
+  const admin = accountsByEmail.get("admin@lec.app") ?? accountsByEmail.get("admin@lifeenergycentre.local");
+  if (admin) {
+    await prisma.adminProfile.upsert({
+      where: { userId: admin.id },
+      create: { userId: admin.id, isSuperAdmin: true },
+      update: {},
+    });
+  }
+  console.log(`  ✓ role profiles populated for demo staff`);
+
   // ── Credit packages ──────────────────────────────────────────────────
   const packages = [
     { name: "Starter",   amount: 500,  credits: 2, sortOrder: 1 },

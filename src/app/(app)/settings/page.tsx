@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { isAdmin } from "@/lib/rbac";
 import { Card, CardContent } from "@/components/ui/card";
 import { Users, Package, GraduationCap, MessagesSquare, Wallet } from "lucide-react";
 import { getSettingPreview, SETTING_KEYS } from "@/lib/settings";
@@ -11,7 +12,7 @@ export const metadata = { title: "Settings" };
 export default async function SettingsPage() {
   const session = await auth();
   if (!session?.user) redirect("/sign-in");
-  if (session.user.role !== "ADMIN") redirect("/dashboard");
+  if (!isAdmin(session.user.role)) redirect("/dashboard");
 
   const [waProvider, razProvider] = await Promise.all([
     getSettingPreview(SETTING_KEYS.whatsappProvider),

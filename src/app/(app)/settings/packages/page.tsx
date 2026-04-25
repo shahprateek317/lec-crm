@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, Plus } from "lucide-react";
 import { auth } from "@/lib/auth";
+import { isAdmin } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent } from "@/components/ui/card";
 import { createPackageAction, updatePackageAction } from "./actions";
@@ -14,7 +15,7 @@ export default async function PackagesSettingsPage({
   searchParams: Promise<{ error?: string; ok?: string }>;
 }) {
   const session = await auth();
-  if (!session?.user || session.user.role !== "ADMIN") redirect("/dashboard");
+  if (!session?.user || !isAdmin(session.user.role)) redirect("/dashboard");
   const sp = await searchParams;
 
   const packages = await prisma.creditPackage.findMany({

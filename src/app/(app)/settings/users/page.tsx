@@ -1,24 +1,52 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, UserPlus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, UserPlus } from "lucide-react";
 import { auth } from "@/lib/auth";
+import { isAdmin } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent } from "@/components/ui/card";
-import { createUserAction, updateUserAction } from "./actions";
+import { t } from "@/lib/i18n";
+import { createUserAction } from "./actions";
 
+export const dynamic = "force-dynamic";
 export const metadata = { title: "Staff accounts" };
 
-export default async function StaffSettingsPage({
+const ROLE_TONE: Partial<Record<string, string>> = {
+  SUPER_ADMIN:       "bg-violet-100 text-violet-900",
+  ADMIN:             "bg-primary/10 text-primary",
+  COORDINATOR:       "bg-blue-100 text-blue-900",
+  COUNSELLOR:        "bg-fuchsia-100 text-fuchsia-900",
+  SENIOR_COUNSELLOR: "bg-fuchsia-200 text-fuchsia-900",
+  HEALER:            "bg-teal-100 text-teal-900",
+  SENIOR_HEALER:     "bg-teal-200 text-teal-900",
+  ACCOUNTS:          "bg-amber-100 text-amber-900",
+  MARKETING_MANAGER: "bg-orange-100 text-orange-900",
+  VIEWER:            "bg-muted text-muted-foreground",
+};
+
+const ROLE_OPTIONS = [
+  "SUPER_ADMIN", "ADMIN", "COORDINATOR", "COUNSELLOR", "SENIOR_COUNSELLOR",
+  "HEALER", "SENIOR_HEALER", "ACCOUNTS", "MARKETING_MANAGER", "VIEWER",
+] as const;
+
+export default async function StaffPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; ok?: string }>;
+  searchParams: Promise<{ role?: string; error?: string; ok?: string }>;
 }) {
   const session = await auth();
-  if (!session?.user || session.user.role !== "ADMIN") redirect("/dashboard");
+  if (!session?.user || !isAdmin(session.user.role)) redirect("/dashboard");
   const sp = await searchParams;
 
   const users = await prisma.user.findMany({
-    orderBy: [{ active: "desc" }, { name: "asc" }],
+    where: sp.role && (ROLE_OPTIONS as readonly string[]).includes(sp.role)
+      ? { role: sp.role as (typeof ROLE_OPTIONS)[number] }
+      : undefined,
+    orderBy: [{ active: "desc" }, { role: "asc" }, { name: "asc" }],
+    select: {
+      id: true, name: true, email: true, role: true, active: true,
+      employeeCode: true, phone: true,
+    },
   });
 
   return (
@@ -27,18 +55,33 @@ export default async function StaffSettingsPage({
         <ChevronLeft className="h-4 w-4" />
         Back to settings
       </Link>
-      <header>
-        <h1 className="font-serif text-3xl font-medium tracking-tight">Staff accounts</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Add new staff and manage their access. Healers can be added loosely — no minimum.
-        </p>
+
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="font-serif text-3xl font-medium tracking-tight">Staff accounts</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Add coordinators, counsellors, healers — set roles and rich profiles.
+          </p>
+        </div>
+        <form
+          method="GET"
+          className="flex items-center gap-2"
+        >
+          <select
+            name="role"
+            defaultValue={sp.role ?? ""}
+            className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm outline-none"
+          >
+            <option value="">All roles</option>
+            {ROLE_OPTIONS.map((r) => (
+              <option key={r} value={r}>{t.roles[r as keyof typeof t.roles]}</option>
+            ))}
+          </select>
+          <button type="submit" className="inline-flex h-10 items-center rounded-lg border border-border bg-card px-3 text-sm hover:bg-muted">Filter</button>
+        </form>
       </header>
 
-      {sp.ok && (
-        <p className="rounded-md bg-emerald-100 px-3 py-2 text-sm text-emerald-900">
-          Saved.
-        </p>
-      )}
+      {sp.ok && <p className="rounded-md bg-emerald-100 px-3 py-2 text-sm text-emerald-900">Saved.</p>}
       {sp.error && (
         <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {decodeURIComponent(sp.error)}
@@ -51,19 +94,20 @@ export default async function StaffSettingsPage({
             <UserPlus className="h-4 w-4 text-primary" />
             <p className="text-sm font-medium">Add staff member</p>
           </div>
-          <form action={createUserAction} className="grid gap-3 md:grid-cols-5">
+          <p className="mb-3 text-xs text-muted-foreground">
+            Enter the basics here — the full role-specific profile (specialisation, availability, charges, etc.) opens automatically after the account is created.
+          </p>
+          <form action={createUserAction} className="grid gap-3 md:grid-cols-[2fr_2fr_1.4fr_1.4fr_auto]">
             <input name="name" placeholder="Full name" required minLength={2} className={inputCls} />
-            <input name="email" type="email" placeholder="email@…" required className={inputCls} />
-            <input name="phone" placeholder="Phone (optional)" className={inputCls} />
-            <select name="role" defaultValue="HEALER" className={inputCls} required>
-              <option value="COORDINATOR">Coordinator</option>
-              <option value="COUNSELLOR">Counsellor</option>
-              <option value="HEALER">Healer</option>
-              <option value="ADMIN">Admin</option>
+            <input name="email" type="email" placeholder="email@…" required className={inputCls} autoCapitalize="off" autoCorrect="off" />
+            <select name="role" defaultValue="HEALER" required className={inputCls}>
+              {ROLE_OPTIONS.map((r) => (
+                <option key={r} value={r}>{t.roles[r as keyof typeof t.roles]}</option>
+              ))}
             </select>
             <input name="password" type="password" placeholder="Temp password" required minLength={6} className={inputCls} />
-            <button type="submit" className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 md:col-span-5">
-              Add account
+            <button type="submit" className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+              <Plus className="mr-1 h-4 w-4" /> Add
             </button>
           </form>
         </CardContent>
@@ -71,31 +115,37 @@ export default async function StaffSettingsPage({
 
       <Card className="rounded-xl">
         <CardContent className="divide-y divide-border p-0">
-          {users.map((u) => (
-            <form
-              key={u.id}
-              action={updateUserAction}
-              className="grid gap-3 p-4 md:grid-cols-[2fr_2fr_1.5fr_1fr_auto_auto] md:items-center"
-            >
-              <input type="hidden" name="id" value={u.id} />
-              <input name="name" defaultValue={u.name} className={inputCls} />
-              <input name="email" type="email" defaultValue={u.email} className={inputCls} readOnly />
-              <input name="phone" defaultValue={u.phone ?? ""} className={inputCls} placeholder="Phone" />
-              <select name="role" defaultValue={u.role} className={inputCls}>
-                <option value="COORDINATOR">Coordinator</option>
-                <option value="COUNSELLOR">Counsellor</option>
-                <option value="HEALER">Healer</option>
-                <option value="ADMIN">Admin</option>
-              </select>
-              <label className="inline-flex items-center gap-2 text-sm">
-                <input type="checkbox" name="active" value="true" defaultChecked={u.active} className="h-4 w-4" />
-                Active
-              </label>
-              <button type="submit" className="inline-flex h-9 items-center rounded-md border border-border bg-card px-3 text-xs font-medium hover:bg-muted">
-                Save
-              </button>
-            </form>
-          ))}
+          {users.length === 0 && (
+            <p className="p-10 text-center text-sm text-muted-foreground">No staff yet.</p>
+          )}
+          {users.map((u) => {
+            const tone = ROLE_TONE[u.role] ?? "bg-muted text-muted-foreground";
+            return (
+              <Link
+                key={u.id}
+                href={`/settings/users/${u.id}`}
+                className="flex items-center justify-between gap-4 p-4 transition-colors hover:bg-muted/60"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate font-medium">{u.name}</p>
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${tone}`}>
+                      {t.roles[u.role as keyof typeof t.roles] ?? u.role}
+                    </span>
+                    {!u.active && (
+                      <span className="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-medium text-rose-900">
+                        inactive
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    {u.employeeCode ?? "no code"} · {u.email}{u.phone ? ` · ${u.phone}` : ""}
+                  </p>
+                </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </Link>
+            );
+          })}
         </CardContent>
       </Card>
     </div>

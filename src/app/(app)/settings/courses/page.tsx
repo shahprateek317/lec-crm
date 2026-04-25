@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, Plus, Lock } from "lucide-react";
 import { auth } from "@/lib/auth";
+import { isAdmin } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createCourseAction, updateCourseAction, addPrereqAction, removePrereqAction } from "./actions";
@@ -14,7 +15,7 @@ export default async function CoursesSettingsPage({
   searchParams: Promise<{ error?: string; ok?: string }>;
 }) {
   const session = await auth();
-  if (!session?.user || session.user.role !== "ADMIN") redirect("/dashboard");
+  if (!session?.user || !isAdmin(session.user.role)) redirect("/dashboard");
   const sp = await searchParams;
 
   const courses = await prisma.course.findMany({

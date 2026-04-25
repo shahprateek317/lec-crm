@@ -13,7 +13,10 @@ export async function logHealingSessionAction(formData: FormData) {
   const healerId = String(formData.get("healerId") ?? "");
   const mode = String(formData.get("mode") ?? "IN_PERSON") as "IN_PERSON" | "DISTANT";
   const chakras = formData.getAll("chakras").map(String);
+  const colorsUsed = formData.getAll("colorsUsed").map(String);
   const creditUsed = formData.get("creditUsed") === "true";
+  const followUpNeeded = formData.get("followUpNeeded") === "true";
+  const nextRec = String(formData.get("nextSessionRecommendedAt") ?? "");
 
   try {
     await logHealingSession({
@@ -21,11 +24,15 @@ export async function logHealingSessionAction(formData: FormData) {
       healerId,
       mode,
       chakras: chakras as never,
+      colorsUsed: colorsUsed as never,
       process: String(formData.get("process") ?? "") || undefined,
       durationMinutes: formData.get("durationMinutes")
         ? Number(formData.get("durationMinutes"))
         : undefined,
       remarks: String(formData.get("remarks") ?? "") || undefined,
+      clientResponse: String(formData.get("clientResponse") ?? "") || undefined,
+      followUpNeeded,
+      nextSessionRecommendedAt: nextRec ? new Date(nextRec) : undefined,
       creditUsed,
     });
   } catch (err) {

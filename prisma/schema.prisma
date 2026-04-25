@@ -15,22 +15,104 @@ datasource db {
 // ──────────────────────────────────────────────────────────────────────────
 
 enum Role {
+  SUPER_ADMIN
   ADMIN
   COORDINATOR
   COUNSELLOR
+  SENIOR_COUNSELLOR
   HEALER
+  SENIOR_HEALER
+  ACCOUNTS
+  MARKETING_MANAGER
+  VIEWER
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+// MCKS-aligned Pranic Healing certifications a healer may hold.
+enum PHLevel {
+  BPH                    // Basic Pranic Healing
+  APH                    // Advanced Pranic Healing
+  PSYCHOTHERAPY
+  CRYSTAL_HEALING
+  ARHATIC_PREP
+  ACPH                   // Associate Certified Pranic Healer
+  CPH                    // Certified Pranic Healer
+  KRIYASHAKTI
+  TWIN_HEART_TRAINER
+  OTHER
+}
+
+enum DayOfWeek {
+  MON
+  TUE
+  WED
+  THU
+  FRI
+  SAT
+  SUN
+}
+
+// Coarse availability bands for staff scheduling.
+enum TimeBand {
+  EARLY_MORNING
+  MORNING
+  AFTERNOON
+  EVENING
+  NIGHT
+}
+
+// Coloured pranas used in advanced healing — captured per session.
+enum PranicColor {
+  WHITE
+  GREEN
+  ORANGE
+  YELLOW
+  BLUE
+  VIOLET
+  RED
+  ELECTRIC_VIOLET
+  GOLD
+}
+
+enum MaritalStatus {
+  SINGLE
+  MARRIED
+  DIVORCED
+  WIDOWED
+  SEPARATED
+  PREFER_NOT_TO_SAY
 }
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  name          String
-  phone         String?
-  passwordHash  String
-  role          Role
-  active        Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  email           String    @unique
+  name            String
+  phone           String?
+  whatsappPhone   String?
+  passwordHash    String
+  role            Role
+  active          Boolean   @default(true)
+
+  // Common HR/profile fields used across all roles.
+  employeeCode    String?   @unique
+  gender          Gender?
+  dob             DateTime?
+  address         String?
+  areaCity        String?
+  emergencyContact String?
+  joiningDate     DateTime?
+  profilePhotoUrl String?
+  remarks         String?
+  lastLoginAt     DateTime?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   assignedClients      Client[]           @relation("AssignedCoordinator")
   counselingSessions   CounselingSession[]
@@ -41,6 +123,126 @@ model User {
   stageTransitions     StageTransition[]
   sessions             Session[]
   accounts             Account[]
+
+  healerProfile        HealerProfile?
+  counsellorProfile    CounsellorProfile?
+  coordinatorProfile   CoordinatorProfile?
+  adminProfile         AdminProfile?
+}
+
+// ── Role-specific profiles ───────────────────────────────────────────────
+// Exists 1:1 with User where role matches. Modelled separately to keep
+// User small and to make role-specific reporting/queries clean.
+
+model HealerProfile {
+  id                      String   @id @default(cuid())
+  userId                  String   @unique
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Professional
+  experienceYears         Int?
+  phLevels                PHLevel[]
+  languages               String[]
+  certificationUrl        String?
+
+  // Mode preferences
+  acceptsInPerson         Boolean  @default(true)
+  acceptsDistant          Boolean  @default(true)
+
+  // Availability
+  preferredTimeBands      TimeBand[]
+  availableDays           DayOfWeek[]
+  maxHealingsPerDay       Int?
+  daysPriorNoticeRequired Int      @default(0)
+  emergencySameDay        Boolean  @default(false)
+
+  // Location
+  canVisitCentre          Boolean  @default(true)
+  homeVisitPossible       Boolean  @default(false)
+
+  // Assignment preferences
+  acceptsDemoFree         Boolean  @default(true)
+  acceptsPaidOnly         Boolean  @default(false)
+  acceptsNewLeads         Boolean  @default(true)
+  prefersRepeatClients    Boolean  @default(false)
+
+  // Focus areas (free-form tags; future: enum)
+  focusAreas              String[]
+
+  // Commercial
+  perSessionCharge        Int?
+  demoSessionCharge       Int?
+  revenueSharePercent     Int?
+  paymentMode             String?  // UPI | Bank | Cash | Other
+
+  // Strategic toggles (dad's section 10)
+  acceptsUrgentCases      Boolean  @default(false)
+  acceptsChildCases       Boolean  @default(true)
+  acceptsElderlyCases     Boolean  @default(true)
+  weekendAvailable        Boolean  @default(false)
+  groupHealingAvailable   Boolean  @default(false)
+
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+model CounsellorProfile {
+  id                    String     @id @default(cuid())
+  userId                String     @unique
+  user                  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  experienceYears       Int?
+  languages             String[]
+  specializations       String[]   // Stress, Anxiety, Emotional Healing, etc.
+
+  acceptsOnline         Boolean    @default(true)
+  acceptsOffline        Boolean    @default(true)
+  preferredTimeBands    TimeBand[]
+  maxSessionsPerDay     Int?
+
+  // CRM permissions
+  canCloseLead          Boolean    @default(false)
+  canAssignVisit        Boolean    @default(true)
+  canOffer99Program     Boolean    @default(true)
+  incentiveEligible     Boolean    @default(true)
+
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+}
+
+model CoordinatorProfile {
+  id                      String   @id @default(cuid())
+  userId                  String   @unique
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  handlesLeads            Boolean  @default(true)
+  handlesFollowUp         Boolean  @default(true)
+  handlesWhatsAppGroups   Boolean  @default(true)
+  handlesPaymentFollowUp  Boolean  @default(true)
+  handlesScheduling       Boolean  @default(true)
+
+  maxCallsPerDay          Int?
+  shiftTiming             String?  // e.g. "10:00–18:00"
+  languages               String[]
+
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+model AdminProfile {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  isSuperAdmin        Boolean  @default(false)
+  fullCrmAccess       Boolean  @default(true)
+  userCreationRights  Boolean  @default(true)
+  reportAccess        Boolean  @default(true)
+  financeAccess       Boolean  @default(true)
+  dashboardAccess     Boolean  @default(true)
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 }
 
 // NextAuth.js v5 tables
@@ -171,15 +373,22 @@ model Client {
   email            String?
   age              Int?
   ageBucket        AgeBucket?
+  gender           Gender?
+  maritalStatus    MaritalStatus?
+  occupation       String?
+  referredBy       String?        // referrer name / source
   area             String?        // free-text: either the picked area or the "specify" fallback
   areaCategory     AreaCategory?
   issue            String?        // free-text brief
   issueCategory    IssueCategory?
+  secondaryConcerns String[]      // multi-select free-form tags
+  takingMedicalTreatment Boolean? // optional yes/no
   issueRefined     String?        // post-counselling refinement
   issueDuration    String?        // free text
   durationBucket   DurationBucket?
   preferredTimeSlot PreferredTimeSlot?
   severity         Int?           // 1-10
+  leadScore        Int            @default(0) // computed nudge for prioritisation
   source           LeadSource     @default(MANUAL)
   stage            PipelineStage  @default(NEW)
   assignedToId    String?
@@ -296,9 +505,13 @@ model HealingSession {
   mode       HealingMode   @default(IN_PERSON)
   date       DateTime      @default(now())
   chakras    Chakra[]
-  process    String?       // e.g. "general sweeping, localised"
+  colorsUsed PranicColor[]
+  process    String?       // e.g. "cleansing", "energising", "general sweeping"
   durationMinutes Int?
   remarks    String?
+  clientResponse String?
+  followUpNeeded Boolean   @default(false)
+  nextSessionRecommendedAt DateTime?
   creditUsed Boolean       @default(true) // false for complimentary sessions
   createdAt  DateTime      @default(now())
 

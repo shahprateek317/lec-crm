@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ChevronLeft, Wallet, ExternalLink } from "lucide-react";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
+import { isAdmin } from "@/lib/rbac";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getSettingPreview, SETTING_KEYS } from "@/lib/settings";
 import { saveRazorpayAction, testRazorpayAction, regenerateWebhookSecretAction } from "./actions";
@@ -16,7 +17,7 @@ export default async function RazorpaySettingsPage({
   searchParams: Promise<{ error?: string; ok?: string; test?: string }>;
 }) {
   const session = await auth();
-  if (!session?.user || session.user.role !== "ADMIN") redirect("/dashboard");
+  if (!session?.user || !isAdmin(session.user.role)) redirect("/dashboard");
   const sp = await searchParams;
 
   const [provider, keyId, keySecret, webhookSecret] = await Promise.all([
