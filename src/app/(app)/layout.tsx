@@ -64,20 +64,25 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               );
             })}
           </nav>
-          <div className="mt-6 rounded-lg bg-sidebar-accent/40 p-3">
-            <p className="text-xs font-medium text-sidebar-foreground">
-              {session.user.name}
+          <div className="mt-6 space-y-2">
+            <p className="px-1 text-[11px] text-muted-foreground">
+              Press <kbd className="rounded border border-border bg-card px-1.5 py-0.5 text-[10px] font-mono">⌘K</kbd> to search anywhere
             </p>
-            <p className="text-xs text-muted-foreground">{roleLabel}</p>
-            <form action={signOutAction} className="mt-2">
-              <button
-                type="submit"
-                className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-                {t.common.signOut}
-              </button>
-            </form>
+            <div className="rounded-lg bg-sidebar-accent/40 p-3">
+              <p className="text-xs font-medium text-sidebar-foreground">
+                {session.user.name}
+              </p>
+              <p className="text-xs text-muted-foreground">{roleLabel}</p>
+              <form action={signOutAction} className="mt-2">
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  {t.common.signOut}
+                </button>
+              </form>
+            </div>
           </div>
         </aside>
 
