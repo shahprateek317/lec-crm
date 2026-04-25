@@ -150,6 +150,9 @@ model HealerProfile {
   acceptsDistant          Boolean  @default(true)
 
   // Availability
+  // availabilitySlots is the modern source of truth — pairs like "MON:MORNING".
+  // preferredTimeBands and availableDays remain for back-compat reports.
+  availabilitySlots       String[]   @default([])
   preferredTimeBands      TimeBand[]
   availableDays           DayOfWeek[]
   maxHealingsPerDay       Int?
@@ -197,6 +200,7 @@ model CounsellorProfile {
 
   acceptsOnline         Boolean    @default(true)
   acceptsOffline        Boolean    @default(true)
+  availabilitySlots     String[]   @default([])
   preferredTimeBands    TimeBand[]
   maxSessionsPerDay     Int?
 

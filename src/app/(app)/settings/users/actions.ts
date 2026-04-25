@@ -100,6 +100,28 @@ const PH_LEVELS = ["BPH", "APH", "PSYCHOTHERAPY", "CRYSTAL_HEALING", "ARHATIC_PR
 const TIME_BANDS = ["EARLY_MORNING", "MORNING", "AFTERNOON", "EVENING", "NIGHT"] as const;
 const DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
 
+// Parse "DAY:BAND" pairs from the AvailabilityGrid into the legacy
+// preferredTimeBands + availableDays arrays so reports/queries that haven't
+// been migrated yet keep working.
+function deriveFromSlots(rawSlots: string[]) {
+  const validSlots: string[] = [];
+  const days = new Set<string>();
+  const bands = new Set<string>();
+  for (const s of rawSlots) {
+    const [d, b] = s.split(":");
+    if ((DAYS as readonly string[]).includes(d) && (TIME_BANDS as readonly string[]).includes(b)) {
+      validSlots.push(`${d}:${b}`);
+      days.add(d);
+      bands.add(b);
+    }
+  }
+  return {
+    availabilitySlots: validSlots,
+    availableDays: Array.from(days) as Array<typeof DAYS[number]>,
+    preferredTimeBands: Array.from(bands) as Array<typeof TIME_BANDS[number]>,
+  };
+}
+
 export async function updateHealerProfileAction(formData: FormData) {
   await requireAdmin();
   const userId = String(formData.get("userId") ?? "");
@@ -110,8 +132,7 @@ export async function updateHealerProfileAction(formData: FormData) {
     String(formData.get(key) ?? "").split(",").map(s => s.trim()).filter(Boolean);
 
   const phLevels = formData.getAll("phLevels").map(String).filter(v => (PH_LEVELS as readonly string[]).includes(v)) as Array<typeof PH_LEVELS[number]>;
-  const preferredTimeBands = formData.getAll("preferredTimeBands").map(String).filter(v => (TIME_BANDS as readonly string[]).includes(v)) as Array<typeof TIME_BANDS[number]>;
-  const availableDays = formData.getAll("availableDays").map(String).filter(v => (DAYS as readonly string[]).includes(v)) as Array<typeof DAYS[number]>;
+  const slotData = deriveFromSlots(formData.getAll("availabilitySlots").map(String));
 
   await prisma.healerProfile.update({
     where: { userId },
@@ -121,8 +142,9 @@ export async function updateHealerProfileAction(formData: FormData) {
       languages: csvList("languages"),
       acceptsInPerson: formData.get("acceptsInPerson") === "true",
       acceptsDistant: formData.get("acceptsDistant") === "true",
-      preferredTimeBands,
-      availableDays,
+      availabilitySlots: slotData.availabilitySlots,
+      preferredTimeBands: slotData.preferredTimeBands,
+      availableDays: slotData.availableDays,
       maxHealingsPerDay: formData.get("maxHealingsPerDay") ? Number(formData.get("maxHealingsPerDay")) : null,
       daysPriorNoticeRequired: formData.get("daysPriorNoticeRequired") ? Number(formData.get("daysPriorNoticeRequired")) : 0,
       emergencySameDay: formData.get("emergencySameDay") === "true",
@@ -157,7 +179,7 @@ export async function updateCounsellorProfileAction(formData: FormData) {
 
   const csvList = (key: string): string[] =>
     String(formData.get(key) ?? "").split(",").map(s => s.trim()).filter(Boolean);
-  const preferredTimeBands = formData.getAll("preferredTimeBands").map(String).filter(v => (TIME_BANDS as readonly string[]).includes(v)) as Array<typeof TIME_BANDS[number]>;
+  const slotData = deriveFromSlots(formData.getAll("availabilitySlots").map(String));
 
   await prisma.counsellorProfile.update({
     where: { userId },
@@ -167,7 +189,8 @@ export async function updateCounsellorProfileAction(formData: FormData) {
       specializations: csvList("specializations"),
       acceptsOnline: formData.get("acceptsOnline") === "true",
       acceptsOffline: formData.get("acceptsOffline") === "true",
-      preferredTimeBands,
+      availabilitySlots: slotData.availabilitySlots,
+      preferredTimeBands: slotData.preferredTimeBands,
       maxSessionsPerDay: formData.get("maxSessionsPerDay") ? Number(formData.get("maxSessionsPerDay")) : null,
       canCloseLead: formData.get("canCloseLead") === "true",
       canAssignVisit: formData.get("canAssignVisit") === "true",

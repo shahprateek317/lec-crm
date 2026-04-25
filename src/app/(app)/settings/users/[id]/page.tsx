@@ -6,6 +6,7 @@ import { isAdmin } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { ensureProfile } from "@/lib/users";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AvailabilityGrid } from "@/components/availability-grid";
 import { t } from "@/lib/i18n";
 import {
   updateUserBasicsAction,
@@ -203,11 +204,8 @@ export default async function UserDetailPage({
                   <Toggle name="acceptsInPerson" label="In-person at the centre" defaultChecked={healer.acceptsInPerson} />
                   <Toggle name="acceptsDistant"  label="Distant healing" defaultChecked={healer.acceptsDistant} />
                 </div>
-                <Field label="Preferred time bands">
-                  <CheckboxGrid name="preferredTimeBands" options={TIME_BANDS} selected={healer.preferredTimeBands as string[]} />
-                </Field>
-                <Field label="Available days">
-                  <CheckboxGrid name="availableDays" options={DAYS} selected={healer.availableDays as string[]} />
+                <Field label="Weekly availability — tap or drag to paint">
+                  <AvailabilityGrid defaultSelected={healer.availabilitySlots} />
                 </Field>
                 <div className="grid gap-4 md:grid-cols-3">
                   <Field id="maxHealingsPerDay" label="Max healings / day">
@@ -306,8 +304,8 @@ export default async function UserDetailPage({
                 <Toggle name="acceptsOffline" label="In-person counselling" defaultChecked={counsellor.acceptsOffline} />
               </div>
 
-              <Field label="Preferred time bands">
-                <CheckboxGrid name="preferredTimeBands" options={TIME_BANDS} selected={counsellor.preferredTimeBands as string[]} />
+              <Field label="Weekly availability — tap or drag to paint">
+                <AvailabilityGrid defaultSelected={counsellor.availabilitySlots} />
               </Field>
 
               <Section title="CRM permissions">
