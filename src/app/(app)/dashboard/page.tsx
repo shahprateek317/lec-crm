@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { STAGES, STAGE_TONE } from "@/lib/pipeline";
 import { StageBadge } from "@/components/leads/stage-badge";
+import { CountUp } from "@/components/count-up";
 import { formatDistanceToNow, startOfMonth, subDays } from "date-fns";
 import type { PipelineStage } from "@prisma/client";
 import { t } from "@/lib/i18n";
@@ -97,11 +98,11 @@ export default async function DashboardPage() {
 
   const maxFunnel = Math.max(...HAPPY_PATH.map((s) => byStage.get(s) ?? 0), 1);
 
-  const metrics = [
+  const metrics: Array<{ label: string; value: number; prefix?: string }> = [
     { label: "Leads this month",       value: leadsThisMonth },
     { label: "Conversions this month", value: convertedThisMonth },
     { label: "Healings this month",    value: healingsThisMonth },
-    { label: "Paid this month",        value: `₹${(paymentsThisMonth._sum.amount ?? 0).toLocaleString("en-IN")}` },
+    { label: "Paid this month",        value: paymentsThisMonth._sum.amount ?? 0, prefix: "₹" },
     { label: "Credits outstanding",    value: creditsOutstanding._sum.delta ?? 0 },
     { label: "WhatsApp msgs sent",     value: messagesThisMonth },
   ];
@@ -181,15 +182,21 @@ export default async function DashboardPage() {
       )}
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-        {metrics.map((m) => (
-          <Card key={m.label} className="rounded-xl">
+        {metrics.map((m, i) => (
+          <Card
+            key={m.label}
+            className="rounded-xl animate-in fade-in slide-in-from-bottom-1"
+            style={{ animationDelay: `${i * 60}ms`, animationDuration: "500ms", animationFillMode: "both" }}
+          >
             <CardHeader className="pb-1">
               <CardTitle className="text-xs font-medium text-muted-foreground">
                 {m.label}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="font-serif text-2xl font-medium">{m.value}</p>
+              <p className="font-serif text-2xl font-medium">
+                <CountUp value={m.value} prefix={m.prefix ?? ""} duration={700} />
+              </p>
             </CardContent>
           </Card>
         ))}
@@ -203,10 +210,11 @@ export default async function DashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {HAPPY_PATH.map((s) => {
+            {HAPPY_PATH.map((s, i) => {
               const count = byStage.get(s) ?? 0;
               const pct = (count / maxFunnel) * 100;
               const tone = STAGE_TONE[s];
+              const animDelay = `${i * 70}ms`;
               return (
                 <div key={s} className="grid grid-cols-[1fr_auto] items-center gap-3">
                   <div className="space-y-1">
@@ -214,12 +222,14 @@ export default async function DashboardPage() {
                       <span className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium ${tone.bg} ${tone.fg}`}>
                         {tone.label}
                       </span>
-                      <span className="text-muted-foreground">{count}</span>
+                      <span className="text-muted-foreground">
+                        <CountUp value={count} duration={900} />
+                      </span>
                     </div>
-                    <div className="h-2 w-full rounded-full bg-muted">
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                       <div
-                        className={`h-2 rounded-full ${tone.bg.replace("bg-", "bg-").replace("-100", "-300")}`}
-                        style={{ width: `${pct}%` }}
+                        className={`h-2 rounded-full ${tone.bg.replace("-100", "-300")} animate-in slide-in-from-left`}
+                        style={{ width: `${pct}%`, animationDelay: animDelay, animationDuration: "700ms", animationFillMode: "both" }}
                       />
                     </div>
                   </div>

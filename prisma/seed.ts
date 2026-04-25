@@ -4,8 +4,26 @@
 
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import type { Role } from "@prisma/client";
 
 const prisma = new PrismaClient();
+
+const ROLE_PREFIX: Record<Role, string> = {
+  SUPER_ADMIN: "LEC-SA", ADMIN: "LEC-A", COORDINATOR: "LEC-X",
+  COUNSELLOR: "LEC-C", SENIOR_COUNSELLOR: "LEC-CS",
+  HEALER: "LEC-H", SENIOR_HEALER: "LEC-HS",
+  ACCOUNTS: "LEC-F", MARKETING_MANAGER: "LEC-M", VIEWER: "LEC-V",
+};
+
+async function ensureCode(userId: string, role: Role): Promise<void> {
+  const u = await prisma.user.findUnique({ where: { id: userId }, select: { employeeCode: true } });
+  if (u?.employeeCode) return;
+  const count = await prisma.user.count({ where: { role } });
+  await prisma.user.update({
+    where: { id: userId },
+    data: { employeeCode: `${ROLE_PREFIX[role]}${String(count).padStart(3, "0")}` },
+  });
+}
 
 async function main() {
   console.log("Seeding Life Energy Centre CRM…");
@@ -22,13 +40,30 @@ async function main() {
   ];
   for (const s of staff) {
     const passwordHash = await bcrypt.hash(s.password, 10);
-    await prisma.user.upsert({
+    const u = await prisma.user.upsert({
       where: { email: s.email },
       update: { name: s.name, role: s.role, active: true },
       create: { email: s.email, name: s.name, role: s.role, active: true, passwordHash },
     });
+    await ensureCode(u.id, u.role);
   }
-  console.log(`  ✓ ${staff.length} staff accounts`);
+  console.log(`  ✓ ${staff.length} staff accounts (with employee codes)`);
+
+  // Disable legacy seed accounts from earlier iterations so the demo is
+  // clean. Don't delete — preserves any history that might reference them.
+  await prisma.user.updateMany({
+    where: {
+      email: {
+        in: [
+          "admin@lifeenergycentre.local",
+          "coordinator@lifeenergycentre.local",
+          "counsellor@lifeenergycentre.local",
+          "healer@lifeenergycentre.local",
+        ],
+      },
+    },
+    data: { active: false },
+  });
 
   // ── Sample role profiles ─────────────────────────────────────────────
   // Populate the new role-specific profile rows so admin sees realistic
@@ -135,9 +170,10 @@ async function main() {
 
   // ── Credit packages ──────────────────────────────────────────────────
   const packages = [
-    { name: "Starter",   amount: 500,  credits: 2, sortOrder: 1 },
-    { name: "Standard",  amount: 1000, credits: 4, sortOrder: 2 },
-    { name: "Extended",  amount: 2000, credits: 8, sortOrder: 3 },
+    { name: "₹99 Program", amount: 99,   credits: 1, sortOrder: 0 },
+    { name: "Starter",     amount: 500,  credits: 2, sortOrder: 1 },
+    { name: "Standard",    amount: 1000, credits: 4, sortOrder: 2 },
+    { name: "Extended",    amount: 2000, credits: 8, sortOrder: 3 },
   ];
   for (const p of packages) {
     await prisma.creditPackage.upsert({

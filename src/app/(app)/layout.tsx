@@ -3,6 +3,7 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { signOutAction } from "./actions";
 import { t } from "@/lib/i18n";
+import { CommandPalette } from "@/components/command-palette";
 import {
   LayoutDashboard,
   Users,
@@ -108,6 +109,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-8">{children}</div>
         </main>
       </div>
+
+      {/* Global ⌘K command palette */}
+      <CommandPalette />
 
       {/* Mobile bottom-tab navigation. Horizontal scrollable. */}
       <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur md:hidden">

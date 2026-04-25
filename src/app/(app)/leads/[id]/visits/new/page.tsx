@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Sparkles } from "lucide-react";
 import { prisma } from "@/lib/prisma";
+import { suggestHealers } from "@/lib/assignment";
+import { DateTimePicker } from "@/components/date-picker";
 import { scheduleVisitAction } from "./actions";
 
 export const metadata = { title: "Schedule visit" };
@@ -16,12 +18,13 @@ export default async function ScheduleVisitPage({
   const { id } = await params;
   const sp = await searchParams;
 
-  const [client, healers] = await Promise.all([
+  const [client, healers, suggestions] = await Promise.all([
     prisma.client.findUnique({ where: { id }, select: { id: true, name: true } }),
     prisma.user.findMany({
-      where: { active: true, role: { in: ["HEALER", "ADMIN"] } },
+      where: { active: true, role: { in: ["HEALER", "SENIOR_HEALER", "ADMIN"] } },
       orderBy: { name: "asc" },
     }),
+    suggestHealers(id, "IN_PERSON", undefined, 3),
   ]);
   if (!client) notFound();
 
@@ -49,23 +52,37 @@ export default async function ScheduleVisitPage({
         <input type="hidden" name="clientId" value={client.id} />
 
         <Field id="scheduledAt" label="Date & time" required>
-          <input
-            id="scheduledAt"
-            name="scheduledAt"
-            type="datetime-local"
-            required
-            defaultValue={defaultDate}
-            className={inputCls}
-          />
+          <DateTimePicker name="scheduledAt" defaultValue={defaultDate} required fromDate={new Date()} />
         </Field>
 
         <Field id="assignedHealerId" label="Assigned healer (optional)">
-          <select id="assignedHealerId" name="assignedHealerId" defaultValue="" className={inputCls}>
+          <select
+            id="assignedHealerId"
+            name="assignedHealerId"
+            defaultValue={suggestions[0]?.user.id ?? ""}
+            className={inputCls}
+          >
             <option value="">Unassigned (assign on arrival)</option>
             {healers.map((h) => (
               <option key={h.id} value={h.id}>{h.name}</option>
             ))}
           </select>
+          {suggestions.length > 0 && suggestions[0].score > 0 && (
+            <div className="mt-2 space-y-1.5 rounded-lg border border-dashed border-border bg-muted/30 p-3">
+              <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                Suggested for this client
+              </p>
+              <ul className="space-y-1">
+                {suggestions.filter((s) => s.score > 0).map((s, i) => (
+                  <li key={s.user.id} className="text-xs">
+                    <span className="font-medium text-foreground">{i + 1}. {s.user.name}</span>
+                    <span className="text-muted-foreground"> · {s.reasons.join(" · ")}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </Field>
 
         {sp.error && (

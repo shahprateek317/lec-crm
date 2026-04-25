@@ -5,6 +5,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getPaymentProvider } from "@/lib/providers/payment";
 import { getWhatsAppProvider } from "@/lib/providers/whatsapp";
+import { syncLeadScore } from "@/lib/lead-score";
 import type { Chakra } from "@prisma/client";
 
 /** Current credit balance for a client (signed sum of ledger deltas). */
@@ -125,6 +126,12 @@ export async function markPaymentPaid(paymentId: string) {
         },
       });
     }
+    return updated;
+  }).then(async (updated) => {
+    // Paying for the ₹99 program affects the lead score; recompute.
+    await syncLeadScore(updated.clientId).catch((err) => {
+      console.error("[credits] syncLeadScore failed", err);
+    });
     return updated;
   });
 }

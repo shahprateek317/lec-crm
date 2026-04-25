@@ -4,6 +4,7 @@
 
 import type { PipelineStage } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { syncLeadScore } from "@/lib/lead-score";
 
 export const STAGES: PipelineStage[] = [
   "NEW",
@@ -89,6 +90,14 @@ export async function transitionStage({ clientId, toStage, byUserId, note }: Tra
       },
     });
 
+    return updated;
+  }).then(async (updated) => {
+    // Stage transitions can change the lead score (e.g. attended counselling).
+    // Recompute outside the transaction so a slow score update can't roll back
+    // the transition.
+    await syncLeadScore(clientId).catch((err) => {
+      console.error("[pipeline] syncLeadScore failed", err);
+    });
     return updated;
   });
 }
