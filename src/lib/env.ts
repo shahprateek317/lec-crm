@@ -3,6 +3,9 @@ import { z } from "zod";
 // Validate env once at boot. Fail fast if required vars are missing in production.
 const schema = z.object({
   DATABASE_URL: z.string().url(),
+  // Optional. If provided, used by `prisma migrate` etc. Prisma reads it
+  // directly via the schema; surfacing here so the validator is aware.
+  DIRECT_URL: z.string().url().optional(),
   AUTH_SECRET: z.string().min(16),
   AUTH_URL: z.string().url().optional(),
   AUTH_TRUST_HOST: z.string().optional(),
