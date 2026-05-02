@@ -1,12 +1,14 @@
-// Auto-assignment helpers. Given a client (and optional time), suggest the
-// best counsellor or healer to assign — based on the rich profile data
-// captured under /settings/users/[id].
+// Auto-assignment helpers. Given a client (and optional time), suggest or
+// outright pick the best counsellor / healer based on the rich profile
+// data captured under /settings/users/[id].
 //
-// Today the UI surfaces the top suggestions; a real auto-assignment engine
-// can layer on top of these helpers later.
+// `suggestHealers` and `suggestCounsellors` return ranked options for the
+// UI to display. `pickHealer` and `pickCounsellor` make the final call
+// when a server action wants a single answer (e.g. auto-assignment on
+// session creation when no healer was chosen manually).
 
 import { prisma } from "@/lib/prisma";
-import type { Client, User, HealerProfile, CounsellorProfile, TimeBand, DayOfWeek } from "@prisma/client";
+import type { User, HealerProfile, CounsellorProfile, TimeBand, DayOfWeek } from "@prisma/client";
 
 export type Suggestion<T> = {
   user: T;
@@ -88,7 +90,59 @@ export async function suggestCounsellors(
     return { user: u, score, reasons };
   });
 
+  // Workload tiebreaker: among similarly scored healers, pick the one
+  // with the fewest sessions today. Cheap aggregate query.
+  if (scheduledAt && out.some((o) => o.score > 0)) {
+    const dayStart = new Date(scheduledAt); dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(scheduledAt); dayEnd.setHours(23, 59, 59, 999);
+    const loads = await prisma.healingSession.groupBy({
+      by: ["healerId"],
+      where: { healerId: { in: out.map((o) => o.user.id) }, date: { gte: dayStart, lte: dayEnd } },
+      _count: { _all: true },
+    });
+    const loadMap = new Map(loads.map((l) => [l.healerId, l._count._all]));
+    return out
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return (loadMap.get(a.user.id) ?? 0) - (loadMap.get(b.user.id) ?? 0);
+      })
+      .slice(0, topN);
+  }
   return out.sort((a, b) => b.score - a.score).slice(0, topN);
+}
+
+/**
+ * Single best healer for a client. Honours mode (in-person / distant) and
+ * a per-day workload tiebreaker. Returns null when nobody qualifies — UI
+ * should surface a clear "no available healer" message rather than silently
+ * picking someone who can't actually do the work.
+ */
+export async function pickHealer(
+  clientId: string,
+  mode: HealingMode = "IN_PERSON",
+  scheduledAt?: Date,
+): Promise<User | null> {
+  const ranked = await suggestHealers(clientId, mode, scheduledAt, 5);
+  const eligible = ranked.filter((s) => s.score > 0);
+  if (eligible.length === 0) return null;
+  return eligible[0].user;
+}
+
+/**
+ * Single best counsellor for a client + optional time. Returns null when
+ * no qualified counsellor exists. Use this when a server action needs to
+ * auto-assign without showing a UI.
+ */
+export async function pickCounsellor(
+  clientId: string,
+  scheduledAt?: Date,
+): Promise<User | null> {
+  const ranked = await suggestCounsellors(clientId, scheduledAt, 5);
+  // Filter to anyone with at least one match reason — never silently
+  // assign a random counsellor with score 0.
+  const eligible = ranked.filter((s) => s.score > 0);
+  if (eligible.length === 0) return ranked[0]?.user ?? null;
+  return eligible[0].user;
 }
 
 // ── Healers ───────────────────────────────────────────────────────

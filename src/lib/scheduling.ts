@@ -6,22 +6,36 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { transitionStage } from "@/lib/pipeline";
 import { getWhatsAppProvider } from "@/lib/providers/whatsapp";
+import { pickHealer, pickCounsellor } from "@/lib/assignment";
 import { format } from "date-fns";
 
 // ── Counselling ─────────────────────────────────────────────────────────
 export const counselingScheduleSchema = z.object({
   clientId: z.string().min(1),
-  counsellorId: z.string().min(1),
+  // Optional — when omitted, scheduleCounseling will auto-pick a counsellor
+  // via pickCounsellor and throw if no match is found.
+  counsellorId: z.string().optional(),
   scheduledAt: z.coerce.date(),
   byUserId: z.string().min(1),
 });
 
 export async function scheduleCounseling(input: z.infer<typeof counselingScheduleSchema>) {
   const parsed = counselingScheduleSchema.parse(input);
+
+  // Auto-assignment fallback when counsellor wasn't picked manually.
+  let counsellorId = parsed.counsellorId;
+  if (!counsellorId) {
+    const picked = await pickCounsellor(parsed.clientId, parsed.scheduledAt);
+    if (!picked) {
+      throw new Error("No counsellor matches this client right now. Please pick one manually or adjust their availability in Settings → Staff.");
+    }
+    counsellorId = picked.id;
+  }
+
   const session = await prisma.counselingSession.create({
     data: {
       clientId: parsed.clientId,
-      counsellorId: parsed.counsellorId,
+      counsellorId,
       scheduledAt: parsed.scheduledAt,
     },
     include: { counsellor: true, client: true },
@@ -101,10 +115,21 @@ export const visitScheduleSchema = z.object({
 
 export async function scheduleVisit(input: z.infer<typeof visitScheduleSchema>) {
   const parsed = visitScheduleSchema.parse(input);
+
+  // Auto-assignment: if the coordinator didn't pick a healer, run the
+  // assignment engine. Returns null when no qualified healer is available
+  // — in that case we still create the visit (unassigned) so the slot is
+  // booked, and the coordinator can assign later.
+  let assignedHealerId = parsed.assignedHealerId;
+  if (!assignedHealerId) {
+    const picked = await pickHealer(parsed.clientId, "IN_PERSON", parsed.scheduledAt);
+    if (picked) assignedHealerId = picked.id;
+  }
+
   const visit = await prisma.visit.create({
     data: {
       clientId: parsed.clientId,
-      assignedHealerId: parsed.assignedHealerId,
+      assignedHealerId,
       scheduledAt: parsed.scheduledAt,
     },
   });
