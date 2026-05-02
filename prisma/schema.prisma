@@ -127,6 +127,7 @@ model User {
   healerUpdates        HealerUpdate[]
   followUps            FollowUp[]
   stageTransitions     StageTransition[]
+  scheduleBlocks       ScheduleBlock[]
   sessions             Session[]
   accounts             Account[]
 
@@ -525,6 +526,37 @@ enum EnergisingAction {
   GENERAL
   SPECIFIC_CHAKRA
   HIGH_POWER
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Healer schedule blocks
+// ──────────────────────────────────────────────────────────────────────────
+// Temporary unavailability the healer (or coordinator on their behalf)
+// declares — wins over the recurring availabilitySlots / availableDays in
+// HealerProfile. Used by pickHealer/suggestHealers and by the calendar UI.
+
+enum ScheduleBlockReason {
+  EMERGENCY
+  PERSONAL
+  TRAVEL
+  SICK_LEAVE
+  TRAINING
+  OTHER
+}
+
+model ScheduleBlock {
+  id        String              @id @default(cuid())
+  userId    String
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startsAt  DateTime
+  endsAt    DateTime
+  fullDay   Boolean             @default(false)
+  reason    ScheduleBlockReason @default(OTHER)
+  note      String?
+  createdAt DateTime            @default(now())
+
+  @@index([userId, startsAt])
+  @@index([startsAt, endsAt])
 }
 
 model HealingSession {

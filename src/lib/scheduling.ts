@@ -148,6 +148,29 @@ export async function scheduleVisit(input: z.infer<typeof visitScheduleSchema>) 
       variables: [format(parsed.scheduledAt, "dd MMM, HH:mm")],
     })
     .catch((err) => console.error("[scheduling] visit confirm WhatsApp failed", err));
+
+  // Notify the assigned healer (if any). Their phone may be on the User
+  // record; fall back to whatsappPhone if set.
+  if (assignedHealerId) {
+    const healer = await prisma.user.findUnique({
+      where: { id: assignedHealerId },
+      select: { name: true, phone: true, whatsappPhone: true },
+    });
+    const healerPhone = healer?.whatsappPhone ?? healer?.phone;
+    if (healer && healerPhone) {
+      getWhatsAppProvider()
+        .sendTemplate({
+          phone: healerPhone,
+          templateName: "healer_assignment",
+          variables: [
+            healer.name.split(" ")[0],
+            client.name,
+            format(parsed.scheduledAt, "dd MMM, HH:mm"),
+          ],
+        })
+        .catch((err) => console.error("[scheduling] healer_assignment WhatsApp failed", err));
+    }
+  }
   return visit;
 }
 

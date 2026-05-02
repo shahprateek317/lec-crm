@@ -252,6 +252,13 @@ async function main() {
         "Namaste {{1}} 🙏\n\nYour healing credit balance is {{2}}. To continue sessions, please top up via one of our packages. Reply to this message and we'll share a payment link.\n\n— Life Energy Centre",
     },
     {
+      name: "healer_assignment",
+      category: "UTILITY",
+      description: "Sent to a healer when a client session is auto-assigned to them.",
+      bodyTemplate:
+        "Namaste {{1}} 🙏\n\nA new session has been assigned to you:\n\n*Client:* {{2}}\n*When:* {{3}}\n\nPlease confirm you can take it. — Life Energy Centre",
+    },
+    {
       name: "feedback_request",
       category: "UTILITY",
       description: "Request feedback after a healing session.",

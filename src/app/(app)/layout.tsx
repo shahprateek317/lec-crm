@@ -21,6 +21,7 @@ import {
 
 const NAV: Array<{ href: string; label: string; short: string; icon: React.ComponentType<{ className?: string }>; roles?: string[] }> = [
   { href: "/dashboard",       label: "Dashboard",            short: "Home",       icon: LayoutDashboard },
+  { href: "/my-schedule",     label: "My schedule",          short: "Mine",       icon: CalendarDays },
   { href: "/leads",           label: "Leads & Clients",      short: "Leads",      icon: Users },
   { href: "/schedule",        label: "Counselling & Visits", short: "Schedule",   icon: CalendarDays },
   { href: "/healing",         label: "Healing Sessions",     short: "Healing",    icon: Sparkles },

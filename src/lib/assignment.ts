@@ -8,6 +8,7 @@
 // session creation when no healer was chosen manually).
 
 import { prisma } from "@/lib/prisma";
+import { listBlocksForUsersAt } from "@/lib/schedule-blocks";
 import type { User, HealerProfile, CounsellorProfile, TimeBand, DayOfWeek } from "@prisma/client";
 
 export type Suggestion<T> = {
@@ -55,7 +56,11 @@ export async function suggestCounsellors(
     ? `${dayFromDate(scheduledAt)}:${bandFromHour(scheduledAt.getHours())}`
     : null;
 
-  const out = counsellors.map((u) => {
+  const blockedIds = scheduledAt
+    ? await listBlocksForUsersAt(counsellors.map((c) => c.id), scheduledAt)
+    : new Set<string>();
+
+  const out = counsellors.filter((u) => !blockedIds.has(u.id)).map((u) => {
     const p = u.counsellorProfile;
     let score = 0;
     const reasons: string[] = [];
@@ -166,7 +171,13 @@ export async function suggestHealers(
     ? `${dayFromDate(scheduledAt)}:${bandFromHour(scheduledAt.getHours())}`
     : null;
 
-  const out = healers.map((u) => {
+  // Filter out healers blocked at the requested instant — schedule blocks
+  // are a hard "no" regardless of base availability.
+  const blockedIds = scheduledAt
+    ? await listBlocksForUsersAt(healers.map((h) => h.id), scheduledAt)
+    : new Set<string>();
+
+  const out = healers.filter((u) => !blockedIds.has(u.id)).map((u) => {
     const p = u.healerProfile;
     let score = 0;
     const reasons: string[] = [];
