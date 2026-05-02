@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { signOutAction } from "./actions";
 import { t } from "@/lib/i18n";
 import { CommandPalette } from "@/components/command-palette";
+import { InstallAppPrompt } from "@/components/install-app-prompt";
 import {
   LayoutDashboard,
   Users,
@@ -117,6 +118,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
       {/* Global ⌘K command palette */}
       <CommandPalette />
+
+      {/* PWA install prompt (auto-detects platform, dismissible for 30 days) */}
+      <InstallAppPrompt />
 
       {/* Mobile bottom-tab navigation. Horizontal scrollable. */}
       <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur md:hidden">

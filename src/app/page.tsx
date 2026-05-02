@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { InstallAppPrompt } from "@/components/install-app-prompt";
 
 export default function HomePage() {
   return (
@@ -49,6 +50,7 @@ export default function HomePage() {
           Pecon Tower · New Town · Kolkata
         </p>
       </div>
+      <InstallAppPrompt />
     </main>
   );
 }
