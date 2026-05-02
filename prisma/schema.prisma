@@ -6,14 +6,12 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  // Runtime queries — use the pooled endpoint on Neon (PgBouncer-backed)
-  // so Vercel's serverless functions can multiplex many short connections.
-  // On the in-house server we'll point both at the same local Postgres.
-  url       = env("DATABASE_URL")
-  // Migrations + introspection need a direct (non-pooled) connection
-  // because the pooler doesn't support all features Prisma migrate uses.
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  // To split runtime (pooled) from migrate (direct), uncomment the
+  // following line AND set DIRECT_URL on Vercel to the non-pooled URL:
+  //   directUrl = env("DIRECT_URL")
+  // Without that env var, Prisma migrate / introspection use DATABASE_URL.
 }
 
 // ──────────────────────────────────────────────────────────────────────────
