@@ -12,18 +12,35 @@ export async function logHealingSessionAction(formData: FormData) {
   const clientId = String(formData.get("clientId") ?? "");
   const healerId = String(formData.get("healerId") ?? "");
   const mode = String(formData.get("mode") ?? "IN_PERSON") as "IN_PERSON" | "DISTANT";
-  const chakras = formData.getAll("chakras").map(String);
+  const sessionType = String(formData.get("sessionType") ?? "PAID") as "DEMO" | "PAID" | "FOLLOW_UP";
   const colorsUsed = formData.getAll("colorsUsed").map(String);
+  const cleansingActions = formData.getAll("cleansingActions").map(String);
+  const energisingActions = formData.getAll("energisingActions").map(String);
   const creditUsed = formData.get("creditUsed") === "true";
   const followUpNeeded = formData.get("followUpNeeded") === "true";
   const nextRec = String(formData.get("nextSessionRecommendedAt") ?? "");
+
+  // Chakra state maps arrive as JSON strings from the v2 form.
+  const tryParse = (s: FormDataEntryValue | null): Record<string, string> => {
+    try { return s ? JSON.parse(String(s)) as Record<string, string> : {}; }
+    catch { return {}; }
+  };
+  const chakraStatesBefore = tryParse(formData.get("chakraStatesBefore"));
+  const chakraStatesAfter  = tryParse(formData.get("chakraStatesAfter"));
+  // Derive the legacy chakras[] list from before-state keys for back-compat.
+  const chakras = Object.keys(chakraStatesBefore);
 
   try {
     await logHealingSession({
       clientId,
       healerId,
       mode,
+      sessionType,
       chakras: chakras as never,
+      chakraStatesBefore,
+      chakraStatesAfter,
+      cleansingActions: cleansingActions as never,
+      energisingActions: energisingActions as never,
       colorsUsed: colorsUsed as never,
       process: String(formData.get("process") ?? "") || undefined,
       durationMinutes: formData.get("durationMinutes")

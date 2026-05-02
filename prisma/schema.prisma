@@ -500,6 +500,27 @@ enum HealingMode {
   DISTANT
 }
 
+enum HealingSessionType {
+  DEMO
+  PAID
+  FOLLOW_UP
+}
+
+enum CleansingAction {
+  NONE
+  GENERAL
+  TARGET_CHAKRA
+  DEEP
+  PSYCHOLOGICAL
+}
+
+enum EnergisingAction {
+  NONE
+  GENERAL
+  SPECIFIC_CHAKRA
+  HIGH_POWER
+}
+
 model HealingSession {
   id         String        @id @default(cuid())
   clientId   String
@@ -507,8 +528,19 @@ model HealingSession {
   healerId   String
   healer     User          @relation(fields: [healerId], references: [id])
   mode       HealingMode   @default(IN_PERSON)
+  sessionType HealingSessionType @default(PAID)
   date       DateTime      @default(now())
   chakras    Chakra[]
+  // Map of chakra-key → status. Stored as JSON so we can evolve the chakra
+  // list without migrations. Keys come from CHAKRA_KEYS in
+  // src/lib/healing-session.ts; values are ChakraState ("BALANCED" / etc).
+  chakraStatesBefore Json?
+  chakraStatesAfter  Json?
+  cleansingActions   CleansingAction[]   @default([])
+  energisingActions  EnergisingAction[]  @default([])
+  // Sum of (after-score − before-score) across all rated chakras.
+  // Higher = more positive change. Computed by logHealingSession() on save.
+  improvementScore   Int                 @default(0)
   colorsUsed PranicColor[]
   process    String?       // e.g. "cleansing", "energising", "general sweeping"
   durationMinutes Int?

@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { getPaymentProvider } from "@/lib/providers/payment";
 import { getWhatsAppProvider } from "@/lib/providers/whatsapp";
 import { syncLeadScore } from "@/lib/lead-score";
+import { parseChakraStates, computeImprovement } from "@/lib/healing";
 import type { Chakra } from "@prisma/client";
 
 /** Current credit balance for a client (signed sum of ledger deltas). */
@@ -141,6 +142,19 @@ export const logHealingSchema = z.object({
   clientId: z.string().min(1),
   healerId: z.string().min(1),
   mode: z.enum(["IN_PERSON", "DISTANT"]).default("IN_PERSON"),
+  sessionType: z.enum(["DEMO", "PAID", "FOLLOW_UP"]).default("PAID"),
+  // Free-form chakra-state maps. Validated leniently against known keys/states
+  // by parseChakraStates so older payloads still load.
+  chakraStatesBefore: z.record(z.string(), z.string()).optional().default({}),
+  chakraStatesAfter:  z.record(z.string(), z.string()).optional().default({}),
+  cleansingActions: z.array(
+    z.enum(["GENERAL", "TARGET_CHAKRA", "DEEP", "PSYCHOLOGICAL"]),
+  ).default([]),
+  energisingActions: z.array(
+    z.enum(["GENERAL", "SPECIFIC_CHAKRA", "HIGH_POWER"]),
+  ).default([]),
+  // Legacy multi-select chakras list — derived from chakraStatesBefore keys
+  // when not explicitly provided. Kept for back-compat with older callers.
   chakras: z.array(
     z.enum([
       "CROWN", "FOREHEAD", "AJNA", "THROAT", "HEART",
@@ -169,12 +183,23 @@ export async function logHealingSession(input: z.infer<typeof logHealingSchema>)
   const parsed = logHealingSchema.parse(input);
 
   return prisma.$transaction(async (tx) => {
+    // Server-authoritative improvement score: never trust the client.
+    const before = parseChakraStates(parsed.chakraStatesBefore);
+    const after = parseChakraStates(parsed.chakraStatesAfter);
+    const { total: improvementScore } = computeImprovement(before, after);
+
     const session = await tx.healingSession.create({
       data: {
         clientId: parsed.clientId,
         healerId: parsed.healerId,
         mode: parsed.mode,
+        sessionType: parsed.sessionType,
         chakras: parsed.chakras as Chakra[],
+        chakraStatesBefore: parsed.chakraStatesBefore as object,
+        chakraStatesAfter: parsed.chakraStatesAfter as object,
+        cleansingActions: parsed.cleansingActions,
+        energisingActions: parsed.energisingActions,
+        improvementScore,
         colorsUsed: parsed.colorsUsed as Array<"WHITE" | "GREEN" | "ORANGE" | "YELLOW" | "BLUE" | "VIOLET" | "RED" | "ELECTRIC_VIOLET" | "GOLD">,
         process: parsed.process,
         durationMinutes: parsed.durationMinutes,
