@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { signOutAction } from "./actions";
 import { t } from "@/lib/i18n";
 import { CommandPalette } from "@/components/command-palette";
+import { InstallPrompt } from "@/components/install-prompt";
 import { InstallAppPrompt } from "@/components/install-app-prompt";
 import {
   LayoutDashboard,
@@ -116,8 +117,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </main>
       </div>
 
-      {/* Global ⌘K command palette */}
+      {/* Global ⌘K command palette + PWA install affordance */}
       <CommandPalette />
+      <InstallPrompt />
 
       {/* PWA install prompt (auto-detects platform, dismissible for 30 days) */}
       <InstallAppPrompt />
