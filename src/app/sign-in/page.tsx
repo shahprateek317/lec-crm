@@ -2,6 +2,7 @@ import { signInAction } from "./actions";
 import { t } from "@/lib/i18n";
 import Link from "next/link";
 import { env } from "@/lib/env";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Sign in" };
 
@@ -48,12 +49,12 @@ export default async function SignInPage({
                     name="callbackUrl"
                     value={sp.callbackUrl ?? "/dashboard"}
                   />
-                  <button
-                    type="submit"
-                    className={`inline-flex h-10 w-full items-center justify-center rounded-md text-sm font-medium transition-colors hover:opacity-80 ${r.tone}`}
+                  <SubmitButton
+                    pendingLabel="Signing in…"
+                    className={`h-10 w-full rounded-md text-sm font-medium hover:opacity-80 ${r.tone}`}
                   >
                     {r.role}
-                  </button>
+                  </SubmitButton>
                 </form>
               ))}
             </div>
@@ -109,12 +110,12 @@ export default async function SignInPage({
             </p>
           )}
 
-          <button
-            type="submit"
-            className="inline-flex h-11 w-full items-center justify-center rounded-lg bg-primary font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+          <SubmitButton
+            pendingLabel="Signing in…"
+            className="h-11 w-full rounded-lg bg-primary font-medium text-primary-foreground shadow-sm hover:bg-primary/90"
           >
             {t.signIn.submit}
-          </button>
+          </SubmitButton>
         </form>
       </div>
     </main>

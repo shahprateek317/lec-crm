@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FlashToaster } from "@/components/flash-toaster";
 import { getSettingPreview, SETTING_KEYS } from "@/lib/settings";
 import { saveWhatsAppAction, testWhatsAppAction, generateVerifyTokenAction } from "./actions";
+import { SubmitButton } from "@/components/submit-button";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "WhatsApp Business" };
@@ -111,12 +112,12 @@ export default async function WhatsAppSettingsPage({
                 {verifyToken.isSet ? verifyToken.preview : "(not set — click Generate)"}
               </code>
             </div>
-            <button
-              type="submit"
-              className="inline-flex h-10 items-center rounded-md border border-border bg-card px-3 text-xs font-medium hover:bg-muted"
+            <SubmitButton
+              pendingLabel="Generating…"
+              className="h-10 rounded-md border border-border bg-card px-3 text-xs font-medium hover:bg-muted"
             >
               Generate new
-            </button>
+            </SubmitButton>
           </form>
           <p className="text-[11px] text-muted-foreground">
             Same Verify Token is entered in Meta&apos;s dashboard. Regenerating it means you need to
@@ -172,19 +173,19 @@ export default async function WhatsAppSettingsPage({
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="submit"
-                className="inline-flex h-10 items-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              <SubmitButton
+                pendingLabel="Saving…"
+                className="h-10 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
               >
                 Save
-              </button>
-              <button
-                type="submit"
+              </SubmitButton>
+              <SubmitButton
                 formAction={testWhatsAppAction}
-                className="inline-flex h-10 items-center rounded-lg border border-border bg-card px-4 text-sm font-medium transition-colors hover:bg-muted"
+                pendingLabel="Testing…"
+                className="h-10 rounded-lg border border-border bg-card px-4 text-sm font-medium hover:bg-muted"
               >
                 Test connection
-              </button>
+              </SubmitButton>
             </div>
           </form>
         </CardContent>
