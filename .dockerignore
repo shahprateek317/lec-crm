@@ -1,0 +1,58 @@
+# Files NOT to copy into the Docker build context.
+# Smaller context = faster builds + smaller image.
+
+# Dependency dirs (we'll npm ci fresh in the build stage)
+node_modules
+.pnp
+.pnp.*
+.yarn/*
+
+# Build outputs (we'll build fresh)
+.next
+out
+build
+dist
+
+# VCS + editor
+.git
+.gitignore
+.gitattributes
+.vscode
+.idea
+
+# Local env (real .env injected at runtime via compose env_file)
+.env
+.env.local
+.env.development*
+.env.test*
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# Test + coverage
+coverage
+.nyc_output
+__tests__
+test
+tests
+
+# Markdown / docs
+README.md
+CHANGELOG.md
+LICENSE
+*.md
+
+# Scripts we don't ship to runtime
+scripts/tools/
+scripts/tools/**
+.husky
+
+# Misc
+*.pem
+.cache
