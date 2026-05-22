@@ -283,11 +283,93 @@ scripts/restore-pg.sh daily/<that-one>.sql.gz
 
 ---
 
-## 12. Known limitations & follow-ups
+## 12. Communications architecture (per dad's "centralized comms" ask)
+
+Dad's spec asked for *"personal numbers should remain hidden, communication
+logs stored, user/healer communicate ONLY through the CRM"*. The outcomes
+he wants — privacy and auditability — are achieved by this layered model
+**without** building a custom in-app chat or paying for masked proxy numbers:
+
+### Layer 1 — Outbound automation (centre → client)
+All system-generated messages flow from the **centre's WhatsApp Business
+number**. Healers' and coordinators' personal numbers are never the sender.
+Templates currently seeded:
+- `lead_welcome`, `intro_session_invitation`, `demo_healing_offer`,
+  `counseling_*`, `visit_*`, `payment_link`, `low_credits`,
+  `healer_assignment`, `feedback_request`, `package_offer`,
+  `course_promotion`, `dormant_reactivation`, `referral_thank_you`,
+  `session_check_in_start`, `session_check_in_end`.
+
+### Layer 2 — Inbound triage (client → centre)
+Customers reply to the centre's number. The webhook at
+`/api/webhook/whatsapp` stores each message on the matching `Client`'s
+record (or creates an "unknown" entry if no phone match). Coordinators see
+inbound messages in the WhatsApp tab of `/leads/[id]`.
+
+### Layer 3 — Healer routing (centre → healer)
+When a client message needs a healer's input, the coordinator either:
+1. Replies directly with the healer's input (paraphrased) — log retained in CRM.
+2. Pings the healer via the existing in-CRM stage transitions / notes,
+   then relays the answer.
+
+**At no point** does a healer message a client from their personal phone.
+**At no point** does a client get a healer's personal number.
+
+### What this means in practice
+- Privacy: ✅ healer phone never exposed
+- Audit: ✅ everything client-facing is in the WhatsApp message log
+- Trade-off: ad-hoc human-to-human chat takes a coordinator hop. For a
+  1500-leads-per-month operation with ~3-5 active healers, this is a
+  *feature* (quality control + lead nurturing happen at the coordinator
+  layer) rather than a bug.
+
+### When to escalate to masked proxy numbers
+If a healer files an explicit complaint that coordinator-triaged chat is
+slowing them down operationally — *not* before — adopt **Exotel virtual
+numbers** (~₹200-500/active relationship/month). Until then, the cost-benefit
+isn't there. Document this decision in `docs/` so the trade-off is recorded.
+
+---
+
+## 13. Session check-in (replaces dad's "OTP at start AND end")
+
+Dad's intent was anti-fraud — the centre wants proof that (a) sessions
+actually happened, (b) duration claims are honest. **Modern UX choice**:
+one-tap WhatsApp confirmation links instead of OTP codes, because reading
+a 6-digit code aloud during a meditative healing session is unnecessary
+friction.
+
+### Flow
+1. **Healer hits "Start a session"** at `/healing/start` → picks client.
+2. CRM creates a `HealingSession` row with `startedAt = now`, generates a
+   `startCheckInToken`, sends the client a WhatsApp template with a one-tap
+   link `https://crm.lifeenergycentre.in/confirm/<token>`.
+3. **Client taps the link** → `clientConfirmedStartAt` is recorded.
+4. Healer carries out the session.
+5. **Healer hits "Mark session ended"** on `/healing/in-progress/<id>` → an
+   `endCheckInToken` is generated and a second confirmation link sent.
+6. **Client taps the second link** → `clientConfirmedEndAt` recorded.
+7. Healer hits "Log session details" → existing healing form (chakras,
+   colours, notes, improvement score).
+
+### Audit signal for /quality
+- A healer-claimed start with no client confirmation within 5 min → flagged.
+- A healer-claimed duration vs. client-confirmed duration that diverges by
+  more than 10 min → flagged.
+- Sessions without an end confirmation → flagged.
+
+Until WhatsApp is live, the confirmation links open as normal URLs — the
+in-progress page exposes a "test link" affordance for the operator.
+
+---
+
+## 14. Known limitations & follow-ups
 
 - **No CI/CD** — deploys are manual rsync + rebuild. Acceptable for one-server, single-developer ops.
 - **Single AZ** — no automatic failover. If `ap-south-1a` has issues, we're down. Adding a multi-AZ RDS + auto-scaling would 3-4× the bill and is overkill for this scale.
 - **Image not tagged by SHA** — rollback requires identifying old image SHA manually. Easy improvement when desired.
 - **No staging environment** — changes deploy direct to prod. Fine while we have low traffic; add staging when traffic justifies.
 - **WhatsApp permanent token via System Users** — see /settings/whatsapp; deferred until Meta's display name approval clears.
+- **Healer certificate file uploads** — schema is in place (`HealerCertificate.storageKey`); titles + dates can be entered today; the actual file upload UI ships in the next iteration once we wire S3 presigned URLs + an `lec-crm-uploads-…` bucket with appropriate IAM.
+- **Existing healing log form (/leads/[id]/healing/new)** doesn't yet pre-fill from an in-progress session ID. Healer-side flow currently creates a duplicate row on save; needs the form refactored to update by `inProgressSessionId` query param.
 - **Vercel deployment is still live** at `lec-crm.vercel.app`. Once this server is verified working, point dad's testing there and eventually decommission the Vercel deployment.

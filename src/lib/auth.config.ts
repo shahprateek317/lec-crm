@@ -27,7 +27,9 @@ export const authConfig = {
       return session;
     },
     authorized({ auth, request }) {
-      const publicPaths = ["/", "/sign-in", "/enquiry", "/api/enquiry", "/dev/pay"];
+      // /confirm/[token] is the public landing for session check-in links
+      // sent to clients via WhatsApp — the token IS the auth, so no login.
+      const publicPaths = ["/", "/sign-in", "/enquiry", "/api/enquiry", "/dev/pay", "/confirm"];
       const { pathname } = request.nextUrl;
       if (publicPaths.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
         return true;

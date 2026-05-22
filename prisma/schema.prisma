@@ -132,6 +132,11 @@ model User {
   sessions             Session[]
   accounts             Account[]
 
+  // Self-uploaded certifications (healer self-service via /me/profile).
+  certifications       HealerCertificate[]
+  // Inverse relation for the "verified by" admin/QC user.
+  certVerifications    HealerCertificate[] @relation("HealerCertVerifier")
+
   healerProfile        HealerProfile?
   counsellorProfile    CounsellorProfile?
   coordinatorProfile   CoordinatorProfile?
@@ -603,6 +608,21 @@ model HealingSession {
   creditUsed Boolean       @default(true) // false for complimentary sessions
   createdAt  DateTime      @default(now())
 
+  // ── Session check-in / check-out (replaces dad's "OTP at start/end") ──
+  // Healer taps Start → client gets a one-tap confirmation link in WhatsApp;
+  // tapping records `clientConfirmedStartAt`. Same flow at end. Healers
+  // can't fabricate session times — the client's tap is the proof.
+  //
+  // `startCheckInToken` / `endCheckInToken` are single-use random URLs.
+  // `startedAt` is when healer initiated; `clientConfirmedStartAt` is the
+  // proof. Discrepancy between them flags an audit issue in /quality.
+  startedAt                DateTime?
+  startCheckInToken        String?   @unique
+  clientConfirmedStartAt   DateTime?
+  endedAt                  DateTime?
+  endCheckInToken          String?   @unique
+  clientConfirmedEndAt     DateTime?
+
   creditEntry   CreditLedgerEntry?
   feedback      ClientFeedback?
 
@@ -898,6 +918,36 @@ enum ReferralReason {
   CENTRE_VISIT     // referee completed their first centre visit
   PACKAGE_PURCHASE // referee bought any healing package
   COURSE_ENROLMENT // referee enrolled in a paid course (bonus path)
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Healer certifications
+// ──────────────────────────────────────────────────────────────────────────
+// Files the healer uploads themselves via /me/profile — MCKS course
+// completion certificates, professional registrations, etc. Stored in S3 by
+// `storageKey` (private bucket, accessed via presigned GET URLs only by
+// admins or the healer themselves).
+
+model HealerCertificate {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String   // free text e.g. "Basic Pranic Healing (MCKS) — Mar 2018"
+  storageKey  String   // S3 object key, e.g. "healer-certs/<userId>/<cuid>.pdf"
+  contentType String   // image/png, application/pdf, etc.
+  fileSize    Int      // bytes
+  // Optional self-reported metadata so admin / quality controller can verify
+  // without opening the file every time.
+  issuingBody String?  // "MCKS Institute of Inner Studies", "World Pranic Healing Foundation", etc.
+  issuedAt    DateTime?
+  expiresAt   DateTime?
+  verifiedAt  DateTime? // null = pending review; set when admin/QC marks verified
+  verifiedById String?
+  verifiedBy   User?   @relation("HealerCertVerifier", fields: [verifiedById], references: [id])
+  notes       String?  // free text from the verifier
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
 }
 
 model ReferralReward {

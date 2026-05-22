@@ -117,7 +117,7 @@ export default async function MySchedulePage({
             Your sessions across the next {days} days, plus any time you've blocked off.
           </p>
         </div>
-        <nav className="flex gap-2">
+        <nav className="flex flex-wrap items-center gap-2">
           {[1, 7, 14, 30].map((n) => (
             <Link
               key={n}
@@ -132,6 +132,14 @@ export default async function MySchedulePage({
               {n === 1 ? "Today" : `${n} days`}
             </Link>
           ))}
+          {/* Quick start — opens the live check-in flow (replaces dad's OTP) */}
+          <Link
+            href="/healing/start"
+            className="inline-flex h-9 items-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+          >
+            <Sparkles className="mr-1 h-3.5 w-3.5" />
+            Start a session
+          </Link>
         </nav>
       </header>
 

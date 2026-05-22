@@ -326,6 +326,20 @@ async function main() {
       bodyTemplate:
         "Namaste {{1}} 🙏\n\nThank you for referring {{2}} to us — they've just {{3}}, and we've added *1 free healing credit* to your account as a small token of our gratitude.\n\nYour total earned credits: {{4}}\n\n— Life Energy Centre",
     },
+    {
+      name: "session_check_in_start",
+      category: "UTILITY",
+      description: "One-tap session-start confirmation — sent when the healer marks the session as begun.",
+      bodyTemplate:
+        "Namaste {{1}} 🙏\n\nYour healing session with {{2}} has begun. Please confirm by tapping the link below — this helps us keep accurate session records:\n\n{{3}}\n\nThank you 🌸\n— Life Energy Centre",
+    },
+    {
+      name: "session_check_in_end",
+      category: "UTILITY",
+      description: "One-tap session-end confirmation — sent when the healer marks the session as ended.",
+      bodyTemplate:
+        "Namaste {{1}} 🙏\n\nYour healing session with {{2}} ({{3}} – now) has ended. Please confirm by tapping the link below:\n\n{{4}}\n\nWe'll send a short feedback request next. 🙏\n— Life Energy Centre",
+    },
   ];
   for (const t of templates) {
     await prisma.whatsAppTemplate.upsert({
