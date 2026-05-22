@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { getPaymentProvider } from "@/lib/providers/payment";
 import { getWhatsAppProvider } from "@/lib/providers/whatsapp";
 import { syncLeadScore } from "@/lib/lead-score";
+import { grantReferralReward } from "@/lib/referral";
 import { parseChakraStates, computeImprovement } from "@/lib/healing";
 import type { Chakra } from "@prisma/client";
 
@@ -129,10 +130,15 @@ export async function markPaymentPaid(paymentId: string) {
     }
     return updated;
   }).then(async (updated) => {
-    // Paying for the ₹99 program affects the lead score; recompute.
+    // Any successful payment bumps the lead score (real commitment signal);
+    // recompute. This is async / fire-and-forget so the caller isn't blocked.
     await syncLeadScore(updated.clientId).catch((err) => {
       console.error("[credits] syncLeadScore failed", err);
     });
+    // Referral reward — if this client was referred, the referrer earns a
+    // healing credit for the package purchase. Idempotent via DB unique.
+    void grantReferralReward(updated.clientId, "PACKAGE_PURCHASE")
+      .catch((err) => console.error("[referral] PACKAGE_PURCHASE grant failed", err));
     return updated;
   });
 }

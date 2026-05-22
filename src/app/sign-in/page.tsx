@@ -11,6 +11,7 @@ const DEMO_ROLES = [
   { role: "Coordinator", email: "coordinator@lec.app", tone: "bg-blue-100 text-blue-900" },
   { role: "Counsellor",  email: "counsellor@lec.app",  tone: "bg-violet-100 text-violet-900" },
   { role: "Healer",      email: "healer@lec.app",      tone: "bg-teal-100 text-teal-900" },
+  { role: "Quality",     email: "quality@lec.app",     tone: "bg-amber-100 text-amber-900" },
 ];
 
 export default async function SignInPage({

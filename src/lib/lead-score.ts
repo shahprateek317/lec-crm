@@ -1,9 +1,12 @@
-// Lead score — coarse heuristic for prioritising follow-up. Per the
-// master-data spec:
+// Lead score — coarse heuristic for prioritising follow-up. Rubric was
+// originally weighted toward the ₹99 introductory program; rewired in May 2026
+// per dad's "Update the existing Healing" doc which retired that program and
+// elevated the centre visit as the primary conversion engine:
 //   +10  Nearby (Kolkata-area locality)
 //   +10  Severe pain (severity >= 8)
 //   +20  Attended counselling at least once
-//   +30  Paid the ₹99 program
+//   +20  Completed at least one centre visit
+//   +30  Paid for any healing package (real commitment signal)
 // Higher = more attention. Stored on Client.leadScore so we can sort/filter
 // without re-computing every render.
 
@@ -19,9 +22,12 @@ export async function computeLeadScore(clientId: string): Promise<number> {
     where: { id: clientId },
     include: {
       counselingSessions: { where: { doneAt: { not: null } }, select: { id: true }, take: 1 },
+      visits:             { where: { visitedAt:   { not: null } }, select: { id: true }, take: 1 },
+      // Any successful payment counts — the ₹99 special case is gone.
       payments: {
-        where: { status: "PAID", amount: { gte: 50, lte: 200 } },
-        select: { id: true, notes: true, package: { select: { name: true } } },
+        where: { status: "PAID" },
+        select: { id: true },
+        take: 1,
       },
     },
   });
@@ -31,13 +37,8 @@ export async function computeLeadScore(clientId: string): Promise<number> {
   if (client.areaCategory && NEARBY_AREAS.includes(client.areaCategory)) score += 10;
   if (typeof client.severity === "number" && client.severity >= 8) score += 10;
   if (client.counselingSessions.length > 0) score += 20;
-
-  const paid99 = client.payments.some((p) =>
-    (p.package?.name ?? "").toLowerCase().includes("99") ||
-    (p.notes ?? "").toLowerCase().includes("99 program") ||
-    (p.notes ?? "").toLowerCase().includes("₹99"),
-  );
-  if (paid99) score += 30;
+  if (client.visits.length > 0)             score += 20;
+  if (client.payments.length > 0)           score += 30;
 
   return score;
 }

@@ -99,9 +99,9 @@ async function main() {
   console.log("Seeding demo data…");
 
   const [coordinator, counsellor, healer] = await Promise.all([
-    prisma.user.findUniqueOrThrow({ where: { email: "coordinator@lifeenergycentre.local" } }),
-    prisma.user.findUniqueOrThrow({ where: { email: "counsellor@lifeenergycentre.local" } }),
-    prisma.user.findUniqueOrThrow({ where: { email: "healer@lifeenergycentre.local" } }),
+    prisma.user.findUniqueOrThrow({ where: { email: "coordinator@lec.app" } }),
+    prisma.user.findUniqueOrThrow({ where: { email: "counsellor@lec.app" } }),
+    prisma.user.findUniqueOrThrow({ where: { email: "healer@lec.app" } }),
   ]);
 
   for (const d of DEMO_CLIENTS) {

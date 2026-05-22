@@ -254,7 +254,7 @@ export default async function LeadsPage({
                             ? "bg-amber-100 text-amber-900"
                             : "bg-muted text-muted-foreground")
                       }
-                      title="Lead score: nearby +10, severe +10, counselling done +20, paid ₹99 +30"
+                      title="Lead score: nearby +10, severe +10, counselling +20, centre visit +20, paid package +30"
                     >
                       ★ {lead.leadScore}
                     </span>

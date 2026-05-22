@@ -17,6 +17,7 @@ import {
   Settings,
   LogOut,
   Clock,
+  ClipboardList,
 } from "lucide-react";
 
 const NAV: Array<{ href: string; label: string; short: string; icon: React.ComponentType<{ className?: string }>; roles?: string[] }> = [
@@ -29,7 +30,8 @@ const NAV: Array<{ href: string; label: string; short: string; icon: React.Compo
   { href: "/payments",        label: "Payments & Credits",   short: "Payments",   icon: Wallet },
   { href: "/courses",         label: "Courses",              short: "Courses",    icon: GraduationCap },
   { href: "/follow-ups",      label: "Follow-ups",           short: "Follow-ups", icon: Clock },
-  { href: "/settings",        label: "Settings",             short: "Settings",   icon: Settings, roles: ["ADMIN"] },
+  { href: "/quality",         label: "Quality",              short: "Quality",    icon: ClipboardList, roles: ["ADMIN", "SUPER_ADMIN", "QUALITY_CONTROLLER"] },
+  { href: "/settings",        label: "Settings",             short: "Settings",   icon: Settings, roles: ["ADMIN", "SUPER_ADMIN"] },
 ];
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {

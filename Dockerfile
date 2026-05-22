@@ -88,10 +88,12 @@ COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma/client ./node_modules/@prisma/client
 
-# Packages used by prisma/seed.ts (run on first boot if SKIP_SEED != true).
-# Next's standalone bundle prunes anything not imported by the app's entry
-# chain — seed.ts has its own imports, so we restore them explicitly.
+# Packages used by prisma/seed.ts + prisma/demo.ts (run on first boot if
+# SKIP_SEED != true). Next's standalone bundle prunes anything not imported by
+# the app's entry chain — these scripts have their own imports, so we restore
+# them explicitly.
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/bcryptjs ./node_modules/bcryptjs
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/date-fns ./node_modules/date-fns
 
 # Entry script: apply migrations, optionally seed, then start the server.
 COPY --chown=nextjs:nodejs docker/entrypoint.sh ./entrypoint.sh

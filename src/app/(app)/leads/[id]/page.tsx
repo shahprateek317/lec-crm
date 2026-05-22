@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, User, Phone, MapPin, Clock, MessagesSquare, ArrowRight, Calendar, CheckCircle2, Wallet, Sparkles } from "lucide-react";
+import { ChevronLeft, User, Phone, MapPin, Clock, MessagesSquare, ArrowRight, Calendar, CheckCircle2, Wallet, Sparkles, UsersRound, Gift } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { allowedNextStages, STAGE_TONE } from "@/lib/pipeline";
@@ -35,6 +35,8 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           orderBy: { createdAt: "desc" },
           take: 30,
         },
+        referrer:  { select: { id: true, name: true, phone: true } },
+        referrals: { select: { id: true, name: true, stage: true, createdAt: true }, orderBy: { createdAt: "desc" } },
       },
     }),
     prisma.user.findMany({
@@ -370,6 +372,63 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
                     ))}
                   </ul>
                 </details>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-xl">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <UsersRound className="h-4 w-4" />
+                Referrals
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              {client.referrer ? (
+                <div className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Referred by</p>
+                    <Link href={`/leads/${client.referrer.id}`} className="truncate font-medium hover:underline">
+                      {client.referrer.name}
+                    </Link>
+                  </div>
+                  <span className="shrink-0 text-xs text-muted-foreground">{client.referrer.phone}</span>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">No referrer recorded.</p>
+              )}
+
+              <div className="flex items-center justify-between rounded-lg bg-primary/5 px-3 py-2">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Healing credits earned</p>
+                  <p className="font-serif text-xl font-medium tabular-nums">{client.healingCreditsEarned}</p>
+                </div>
+                <Gift className="h-5 w-5 text-primary" aria-hidden />
+              </div>
+
+              {client.referrals.length > 0 ? (
+                <div>
+                  <p className="mb-1.5 text-xs uppercase tracking-wide text-muted-foreground">
+                    Referrals made ({client.referrals.length})
+                  </p>
+                  <ul className="space-y-1.5">
+                    {client.referrals.slice(0, 6).map((r) => (
+                      <li key={r.id} className="flex items-center justify-between gap-2 text-sm">
+                        <Link href={`/leads/${r.id}`} className="min-w-0 truncate hover:underline">
+                          {r.name}
+                        </Link>
+                        <StageBadge stage={r.stage} />
+                      </li>
+                    ))}
+                  </ul>
+                  {client.referrals.length > 6 && (
+                    <p className="mt-1.5 text-[11px] text-muted-foreground">
+                      +{client.referrals.length - 6} more
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">No referrals sent in yet.</p>
               )}
             </CardContent>
           </Card>

@@ -51,6 +51,7 @@ export const en = {
     SENIOR_COUNSELLOR: "Senior Counsellor",
     HEALER: "Healer",
     SENIOR_HEALER: "Senior Healer",
+    QUALITY_CONTROLLER: "Quality Controller",
     ACCOUNTS: "Accounts",
     MARKETING_MANAGER: "Marketing Manager",
     VIEWER: "Viewer",

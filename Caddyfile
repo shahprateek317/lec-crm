@@ -3,8 +3,19 @@
 # Caddy auto-provisions Let's Encrypt certificates as long as $DOMAIN points
 # to this server's public IP. For initial bring-up (no DNS yet), set
 # DOMAIN=:80 in .env — that serves over plain HTTP for the EC2 public IP.
-# Once DNS is pointed, set DOMAIN to the actual hostname (e.g. crm.lifeenergycenter.in)
+# Once DNS is pointed, set DOMAIN to the actual hostname (e.g. lifeenergycentre.in)
 # and `docker compose restart caddy`. Caddy will fetch + install certs in <30s.
+
+{
+	# Email used by Let's Encrypt for cert-expiry notices. Optional; safe to leave
+	# blank during early bring-up (`DOMAIN=:80`) — only mandatory in prod.
+	email {$ACME_EMAIL:support@lifeenergycentre.in}
+}
+
+# Redirect www → apex (canonical URL is the apex, no www).
+www.{$DOMAIN} {
+	redir https://{$DOMAIN}{uri} permanent
+}
 
 {$DOMAIN} {
 	encode zstd gzip

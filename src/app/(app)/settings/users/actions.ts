@@ -194,7 +194,6 @@ export async function updateCounsellorProfileAction(formData: FormData) {
       maxSessionsPerDay: formData.get("maxSessionsPerDay") ? Number(formData.get("maxSessionsPerDay")) : null,
       canCloseLead: formData.get("canCloseLead") === "true",
       canAssignVisit: formData.get("canAssignVisit") === "true",
-      canOffer99Program: formData.get("canOffer99Program") === "true",
       incentiveEligible: formData.get("incentiveEligible") === "true",
     },
   });

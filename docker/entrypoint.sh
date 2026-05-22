@@ -33,6 +33,8 @@ prisma migrate deploy
 if [ "${SKIP_SEED:-false}" != "true" ]; then
   echo "→ running idempotent seed (set SKIP_SEED=true once you go live)"
   tsx prisma/seed.ts || echo "WARN: seed failed (continuing)"
+  echo "→ topping up demo data (leads, payments, healing sessions)"
+  tsx prisma/demo.ts || echo "WARN: demo top-up failed (continuing)"
 fi
 
 echo "→ starting Next.js on $HOSTNAME:$PORT"

@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { transitionStage } from "@/lib/pipeline";
 import { getWhatsAppProvider } from "@/lib/providers/whatsapp";
 import { pickHealer, pickCounsellor } from "@/lib/assignment";
+import { grantReferralReward } from "@/lib/referral";
 import { format } from "date-fns";
 
 // ── Counselling ─────────────────────────────────────────────────────────
@@ -196,5 +197,10 @@ export async function completeVisit(input: z.infer<typeof visitCompleteSchema>) 
     toStage: "VISIT_DONE",
     byUserId: parsed.byUserId,
   });
+  // Referral reward — if this client was referred by another client, the
+  // referrer earns a healing credit. Idempotent (DB unique on reason),
+  // fire-and-forget so a referral hiccup never blocks visit completion.
+  void grantReferralReward(visit.clientId, "CENTRE_VISIT")
+    .catch((err) => console.error("[referral] CENTRE_VISIT grant failed", err));
   return visit;
 }

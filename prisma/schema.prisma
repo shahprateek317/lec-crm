@@ -26,6 +26,9 @@ enum Role {
   SENIOR_COUNSELLOR
   HEALER
   SENIOR_HEALER
+  // Added per dad's "Update the existing Healing" doc — audits healing
+  // sessions, reviews healer records, gives ratings + quality feedback.
+  QUALITY_CONTROLLER
   ACCOUNTS
   MARKETING_MANAGER
   VIEWER
@@ -212,7 +215,6 @@ model CounsellorProfile {
   // CRM permissions
   canCloseLead          Boolean    @default(false)
   canAssignVisit        Boolean    @default(true)
-  canOffer99Program     Boolean    @default(true)
   incentiveEligible     Boolean    @default(true)
 
   createdAt             DateTime   @default(now())
@@ -385,7 +387,16 @@ model Client {
   gender           Gender?
   maritalStatus    MaritalStatus?
   occupation       String?
-  referredBy       String?        // referrer name / source
+  referredBy       String?        // free-text source label ("Friend Anita", "Instagram", "Dr Sharma")
+  // Programmatic referrer link (Client → Client) for the rewards engine.
+  // `referredBy` stays for the free-form acquisition channel; `referrerClientId`
+  // captures the actual client who sent them, so we can credit that client.
+  referrerClientId String?
+  referrer         Client?        @relation("ClientReferrals", fields: [referrerClientId], references: [id])
+  referrals        Client[]       @relation("ClientReferrals")
+  // Healing credits awarded for successful referrals — tracked separately from
+  // purchased credits so we can show the client what they've earned.
+  healingCreditsEarned Int        @default(0)
   area             String?        // free-text: either the picked area or the "specify" fallback
   areaCategory     AreaCategory?
   issue            String?        // free-text brief
@@ -420,10 +431,15 @@ model Client {
   whatsappMessages     WhatsAppMessage[]
   enrollments          Enrollment[]
   stageTransitions     StageTransition[]
+  // Referral rewards this client has earned (as the referrer) and the ones
+  // they've triggered as the referee. Kept on both sides for easy querying.
+  referralRewardsEarned ReferralReward[] @relation("ReferralRewardsAsReferrer")
+  referralRewardsAsReferee ReferralReward[] @relation("ReferralRewardsAsReferee")
 
   @@index([stage])
   @@index([assignedToId])
   @@index([createdAt])
+  @@index([referrerClientId])
 }
 
 model StageTransition {
@@ -867,4 +883,37 @@ model Enrollment {
 
   @@unique([clientId, courseId])
   @@index([status])
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Referral rewards
+// ──────────────────────────────────────────────────────────────────────────
+// Per dad's "Update the existing Healing" doc — a client who refers a friend
+// who completes a centre visit OR buys a package earns a free healing credit.
+// One row per qualifying event (so a referrer can earn multiple credits if
+// they refer multiple people). `sessionsAwarded` is the increment applied to
+// the referrer's `healingCreditsEarned`; usually 1 but kept configurable.
+
+enum ReferralReason {
+  CENTRE_VISIT     // referee completed their first centre visit
+  PACKAGE_PURCHASE // referee bought any healing package
+  COURSE_ENROLMENT // referee enrolled in a paid course (bonus path)
+}
+
+model ReferralReward {
+  id              String         @id @default(cuid())
+  referrerId      String
+  referrer        Client         @relation("ReferralRewardsAsReferrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  refereeId       String
+  referee         Client         @relation("ReferralRewardsAsReferee", fields: [refereeId], references: [id], onDelete: Cascade)
+  reason          ReferralReason
+  sessionsAwarded Int            @default(1)
+  note            String?
+  createdAt       DateTime       @default(now())
+
+  @@index([referrerId])
+  @@index([refereeId])
+  // Same reason can only fire once per (referrer, referee) — prevents
+  // double-credits if a hook re-runs.
+  @@unique([referrerId, refereeId, reason])
 }

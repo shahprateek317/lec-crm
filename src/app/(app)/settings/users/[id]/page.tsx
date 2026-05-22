@@ -319,7 +319,6 @@ export default async function UserDetailPage({
                 <div className="grid gap-3 md:grid-cols-2">
                   <Toggle name="canCloseLead"      label="Can mark lead as Lost" defaultChecked={counsellor.canCloseLead} />
                   <Toggle name="canAssignVisit"    label="Can schedule visits" defaultChecked={counsellor.canAssignVisit} />
-                  <Toggle name="canOffer99Program" label="Can offer ₹99 program" defaultChecked={counsellor.canOffer99Program} />
                   <Toggle name="incentiveEligible" label="Incentive-eligible" defaultChecked={counsellor.incentiveEligible} />
                 </div>
               </Section>

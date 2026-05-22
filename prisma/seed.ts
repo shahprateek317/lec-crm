@@ -12,6 +12,7 @@ const ROLE_PREFIX: Record<Role, string> = {
   SUPER_ADMIN: "LEC-SA", ADMIN: "LEC-A", COORDINATOR: "LEC-X",
   COUNSELLOR: "LEC-C", SENIOR_COUNSELLOR: "LEC-CS",
   HEALER: "LEC-H", SENIOR_HEALER: "LEC-HS",
+  QUALITY_CONTROLLER: "LEC-Q",
   ACCOUNTS: "LEC-F", MARKETING_MANAGER: "LEC-M", VIEWER: "LEC-V",
 };
 
@@ -32,11 +33,12 @@ async function main() {
   // Mobile-friendly credentials for the demo. Short email, no symbols in
   // password. Password is the same across all four so it's easy to remember;
   // roles are differentiated by the email only.
-  const staff: Array<{ email: string; name: string; role: "ADMIN" | "COORDINATOR" | "COUNSELLOR" | "HEALER"; password: string }> = [
-    { email: "admin@lec.app",       name: "Admin",       role: "ADMIN",       password: "demo1234" },
-    { email: "coordinator@lec.app", name: "Coordinator", role: "COORDINATOR", password: "demo1234" },
-    { email: "counsellor@lec.app",  name: "Counsellor",  role: "COUNSELLOR",  password: "demo1234" },
-    { email: "healer@lec.app",      name: "Healer",      role: "HEALER",      password: "demo1234" },
+  const staff: Array<{ email: string; name: string; role: "ADMIN" | "COORDINATOR" | "COUNSELLOR" | "HEALER" | "QUALITY_CONTROLLER"; password: string }> = [
+    { email: "admin@lec.app",       name: "Admin",              role: "ADMIN",              password: "demo1234" },
+    { email: "coordinator@lec.app", name: "Coordinator",        role: "COORDINATOR",        password: "demo1234" },
+    { email: "counsellor@lec.app",  name: "Counsellor",         role: "COUNSELLOR",         password: "demo1234" },
+    { email: "healer@lec.app",      name: "Healer",             role: "HEALER",             password: "demo1234" },
+    { email: "quality@lec.app",     name: "Quality Controller", role: "QUALITY_CONTROLLER", password: "demo1234" },
   ];
   for (const s of staff) {
     const passwordHash = await bcrypt.hash(s.password, 10);
@@ -97,8 +99,10 @@ async function main() {
         acceptsDemoFree: true,
         acceptsNewLeads: true,
         focusAreas: ["Stress", "Back pain", "Anxiety", "Sleep"],
+        // Per dad's revised pricing: paid sessions ₹500, demos are free for the
+        // client (we still pay the healer their revenue share separately).
         perSessionCharge: 500,
-        demoSessionCharge: 99,
+        demoSessionCharge: 0,
         revenueSharePercent: 60,
         paymentMode: "UPI",
         acceptsChildCases: true,
@@ -132,7 +136,6 @@ async function main() {
         maxSessionsPerDay: 5,
         canCloseLead: false,
         canAssignVisit: true,
-        canOffer99Program: true,
         incentiveEligible: true,
       },
       update: {},
@@ -169,31 +172,61 @@ async function main() {
   console.log(`  ✓ role profiles populated for demo staff`);
 
   // ── Credit packages ──────────────────────────────────────────────────
+  // Dad's revised pricing model (May 2026):
+  //   • Single Healing  — ₹500 / session    (1 credit)
+  //   • Mini package    — ₹500 = 2 sessions (effectively half-price)
+  //   • Standard pack   — ₹1000 = 4 sessions
+  //   • Extended pack   — ₹2000 = 8 sessions (best per-session value)
+  // The ₹99 introductory program has been retired completely — replaced by
+  // free demo sessions to motivate the centre visit, per the new business flow.
   const packages = [
-    { name: "₹99 Program", amount: 99,   credits: 1, sortOrder: 0 },
-    { name: "Starter",     amount: 500,  credits: 2, sortOrder: 1 },
-    { name: "Standard",    amount: 1000, credits: 4, sortOrder: 2 },
-    { name: "Extended",    amount: 2000, credits: 8, sortOrder: 3 },
+    { name: "Single Healing", amount: 500,  credits: 1, sortOrder: 0 },
+    { name: "Mini Pack",      amount: 500,  credits: 2, sortOrder: 1 },
+    { name: "Standard Pack",  amount: 1000, credits: 4, sortOrder: 2 },
+    { name: "Extended Pack",  amount: 2000, credits: 8, sortOrder: 3 },
   ];
+  // Deactivate any prior packages we've renamed so the old IDs don't reappear.
+  await prisma.creditPackage.updateMany({
+    where: { id: { in: ["pkg_₹99 program", "pkg_starter", "pkg_standard", "pkg_extended"] } },
+    data: { active: false },
+  });
   for (const p of packages) {
+    const id = `pkg_${p.name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")}`;
     await prisma.creditPackage.upsert({
-      where: { id: `pkg_${p.name.toLowerCase()}` },
-      update: { amount: p.amount, credits: p.credits, sortOrder: p.sortOrder, active: true },
-      create: { id: `pkg_${p.name.toLowerCase()}`, name: p.name, amount: p.amount, credits: p.credits, sortOrder: p.sortOrder, active: true },
+      where: { id },
+      update: { name: p.name, amount: p.amount, credits: p.credits, sortOrder: p.sortOrder, active: true },
+      create: { id, name: p.name, amount: p.amount, credits: p.credits, sortOrder: p.sortOrder, active: true },
     });
   }
-  console.log(`  ✓ ${packages.length} credit packages`);
+  console.log(`  ✓ ${packages.length} credit packages (₹99 program retired)`);
 
   // ── WhatsApp templates ───────────────────────────────────────────────
   // Bodies follow Meta's {{1}}, {{2}} placeholder convention and match the
   // template names that would be submitted to Meta for approval.
+  // Updated May 2026 to mirror dad's revised lead-nurture flow:
+  //   Lead → brochure + visit invitation → intro session → free demo healing →
+  //   centre visit → free healing → paid healing → courses → referrals.
   const templates = [
     {
       name: "lead_welcome",
       category: "UTILITY",
-      description: "Sent right after a new enquiry is captured.",
+      description: "Initial welcome with brochure and centre-visit invitation.",
       bodyTemplate:
-        "Namaste {{1}} 🙏\n\nThank you for reaching out to Life Energy Centre. We've received your enquiry and a coordinator will call you shortly to schedule an online counselling session.\n\n— Life Energy Centre, New Town, Kolkata",
+        "Namaste {{1}} 🙏\n\nThank you for reaching out to Life Energy Centre.\n\nWe'd love to invite you for a *free centre visit* at Pecon Tower, New Town — where you can experience a complimentary Pranic Healing session, learn about our courses, and meet our team.\n\nDownload our brochure here: {{2}}\n\nReply with a date & time that suits you, and our coordinator will confirm. 🙏\n\n— Life Energy Centre",
+    },
+    {
+      name: "intro_session_invitation",
+      category: "UTILITY",
+      description: "Sent if the lead doesn't respond to the welcome — invites them to a free online introductory session + meditation.",
+      bodyTemplate:
+        "Namaste {{1}} 🙏\n\nWe noticed you haven't been able to visit yet. Would you like to join our *free online introductory session* on Pranic Healing? It includes a guided meditation and a short Q&A.\n\nNext session: {{2}}\nJoin link: {{3}}\n\nNo obligation — come, experience, decide. 🙏\n\n— Life Energy Centre",
+    },
+    {
+      name: "demo_healing_offer",
+      category: "UTILITY",
+      description: "Sent if the lead still hasn't engaged — offers a free demo distant healing session.",
+      bodyTemplate:
+        "Namaste {{1}} 🙏\n\nWe'd like to offer you a *free demo healing session* — done remotely (distant healing), no need to travel. You'll likely feel the difference within a day.\n\nReply with a convenient 30-minute window and we'll schedule a healer to send healing energy at that time.\n\n— Life Energy Centre",
     },
     {
       name: "counseling_confirmation",
@@ -264,6 +297,34 @@ async function main() {
       description: "Request feedback after a healing session.",
       bodyTemplate:
         "Namaste {{1}} 🙏\n\nHow are you feeling after today's healing session? Please share any changes — energy, pain levels, sleep, mood — however small. Your feedback helps us support you better.\n\n— Life Energy Centre",
+    },
+    {
+      name: "package_offer",
+      category: "MARKETING",
+      description: "Soft pitch for a healing package after a demo or first paid session.",
+      bodyTemplate:
+        "Namaste {{1}} 🙏\n\nGlad you found value in your recent healing session. To continue the journey, we offer healing packages:\n\n• *Single* — ₹500 / session\n• *Mini Pack* — ₹500 = 2 sessions\n• *Standard* — ₹1000 = 4 sessions\n• *Extended* — ₹2000 = 8 sessions\n\nReply with your choice and we'll send a secure payment link.\n\n— Life Energy Centre",
+    },
+    {
+      name: "course_promotion",
+      category: "MARKETING",
+      description: "Promotes the Basic Pranic Healing course after a few healing sessions.",
+      bodyTemplate:
+        "Namaste {{1}} 🙏\n\nMany of our clients ask: *can I learn to heal myself and my family?* — yes, and the journey starts with the *Basic Pranic Healing* course.\n\n• 2-day weekend workshop\n• Certified by MCKS\n• Lifelong technique you can practise at home\n\nNext batch: {{2}}\nFee: ₹{{3}} (paid healing credits adjustable)\n\nReply *YES* to reserve a seat.\n\n— Life Energy Centre",
+    },
+    {
+      name: "dormant_reactivation",
+      category: "MARKETING",
+      description: "Periodic touchpoint for cold/dormant leads — meditation invite, video, or event.",
+      bodyTemplate:
+        "Namaste {{1}} 🙏\n\nIt's been a while — we hope you're well. We're hosting a free guided meditation this {{2}}. A short break from the day, with collective healing energy. 🌸\n\nJoin link: {{3}}\n\n— Life Energy Centre",
+    },
+    {
+      name: "referral_thank_you",
+      category: "UTILITY",
+      description: "Sent to a client when their referral books a centre visit or buys a package — confirms the free healing credit awarded.",
+      bodyTemplate:
+        "Namaste {{1}} 🙏\n\nThank you for referring {{2}} to us — they've just {{3}}, and we've added *1 free healing credit* to your account as a small token of our gratitude.\n\nYour total earned credits: {{4}}\n\n— Life Energy Centre",
     },
   ];
   for (const t of templates) {

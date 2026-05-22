@@ -4,8 +4,18 @@ import { auth } from "@/lib/auth";
 // Roles that have full admin powers (Super Admin is a stronger Admin).
 export const ADMIN_ROLES: ReadonlyArray<Role> = ["SUPER_ADMIN", "ADMIN"];
 
+// Roles that can review/audit healing sessions and rate healer quality.
+// Admin inherits this for now (they can see everything anyway).
+export const QUALITY_AUDITOR_ROLES: ReadonlyArray<Role> = [
+  "SUPER_ADMIN", "ADMIN", "QUALITY_CONTROLLER",
+];
+
 export function isAdmin(role: Role): boolean {
   return ADMIN_ROLES.includes(role);
+}
+
+export function canAuditQuality(role: Role): boolean {
+  return QUALITY_AUDITOR_ROLES.includes(role);
 }
 
 export async function requireSession() {
