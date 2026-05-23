@@ -1,14 +1,24 @@
 // WhatsApp Cloud API webhook — delivery status + inbound messages.
 //
 // Verification (GET): Meta calls with ?hub.mode=subscribe&hub.verify_token=…&hub.challenge=…
-// Receiver (POST): { entry: [{ changes: [{ value: { statuses?, messages? } }] }] }
+// Receiver (POST):    { entry: [{ changes: [{ value: { statuses?, messages? } }] }] }
 //
-// Configure in Meta App Dashboard: GET+POST https://<your-domain>/api/webhook/whatsapp
-// Verify token must match WHATSAPP_VERIFY_TOKEN in .env.local.
+// SECURITY: Every POST body MUST be HMAC-SHA256-signed by Meta using the
+// App Secret. We read the raw body, verify the X-Hub-Signature-256 header,
+// then parse + dispatch. Without the App Secret configured the webhook
+// **fails closed** (returns 401) rather than processing unauthenticated
+// payloads — accepting them would let anyone on the internet inject phantom
+// inbound messages into /inbox.
+//
+// Configure in Meta App Dashboard:
+//   • GET+POST https://<your-domain>/api/webhook/whatsapp
+//   • Verify token: WHATSAPP_VERIFY_TOKEN (or /settings/whatsapp DB setting)
+//   • App Secret:    WHATSAPP_APP_SECRET    (or /settings/whatsapp DB setting)
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSetting, SETTING_KEYS } from "@/lib/settings";
+import { verifyWhatsAppSignature } from "@/lib/webhook-signing";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -39,9 +49,20 @@ type InboundMessage = {
 };
 
 export async function POST(req: Request) {
+  // Read raw bytes BEFORE any JSON parsing — Meta signs the exact body.
+  const raw = await req.text();
+  const signature = req.headers.get("x-hub-signature-256");
+  const appSecret = await getSetting(SETTING_KEYS.whatsappAppSecret);
+
+  if (!verifyWhatsAppSignature(raw, signature, appSecret)) {
+    // Fail closed. Do not leak which check failed (signature vs missing
+    // secret) — a 401 with a generic message limits oracle attacks.
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
   let body: unknown;
   try {
-    body = await req.json();
+    body = JSON.parse(raw);
   } catch {
     return NextResponse.json({ error: "invalid JSON" }, { status: 400 });
   }
@@ -73,6 +94,11 @@ export async function POST(req: Request) {
 
       // Inbound messages
       for (const msg of value.messages ?? []) {
+        // Meta sends digits-only `from` (E.164 without +). Client.phone is
+        // canonicalised to "+" + digits by the enquiry intake; we mirror
+        // that here. Unmatched phones surface as orphan messages with
+        // clientId = null and are rendered as "Unknown sender" threads
+        // in /inbox (Phase 1b).
         const phone = "+" + msg.from;
         const client = await prisma.client.findUnique({ where: { phone } });
         const body = msg.text?.body ?? `[${msg.type}]`;

@@ -14,6 +14,11 @@ const schema = z.object({
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
   WHATSAPP_ACCESS_TOKEN: z.string().optional(),
   WHATSAPP_VERIFY_TOKEN: z.string().optional(),
+  // App Secret from Meta App dashboard. Used to verify the X-Hub-Signature-256
+  // header on /api/webhook/whatsapp. Without it, the webhook fails closed
+  // (rejects every POST) — preferred over silently accepting forged inbound
+  // messages into the coordinator inbox.
+  WHATSAPP_APP_SECRET: z.string().optional(),
 
   RAZORPAY_PROVIDER: z.enum(["stub", "razorpay"]).default("stub"),
   RAZORPAY_KEY_ID: z.string().optional(),

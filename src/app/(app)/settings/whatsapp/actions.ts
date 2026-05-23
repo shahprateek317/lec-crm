@@ -12,11 +12,13 @@ export async function saveWhatsAppAction(formData: FormData) {
   const provider = String(formData.get("provider") ?? "stub");
   const phoneNumberId = String(formData.get("phoneNumberId") ?? "").trim();
   const accessToken = String(formData.get("accessToken") ?? "").trim();
+  const appSecret = String(formData.get("appSecret") ?? "").trim();
 
   try {
     await setSetting(SETTING_KEYS.whatsappProvider, provider === "meta" ? "meta" : "stub", session.user.id);
     if (phoneNumberId) await setSetting(SETTING_KEYS.whatsappPhoneId, phoneNumberId, session.user.id);
     if (accessToken) await setSetting(SETTING_KEYS.whatsappToken, accessToken, session.user.id);
+    if (appSecret) await setSetting(SETTING_KEYS.whatsappAppSecret, appSecret, session.user.id);
   } catch (err) {
     const msg = encodeURIComponent(err instanceof Error ? err.message : "Save failed");
     redirect(`/settings/whatsapp?error=${msg}`);

@@ -41,6 +41,7 @@ export const SETTING_KEYS = {
   whatsappPhoneId:     "whatsapp.phone_number_id",
   whatsappToken:       "whatsapp.access_token",
   whatsappVerifyToken: "whatsapp.verify_token",
+  whatsappAppSecret:   "whatsapp.app_secret",
 
   razorpayProvider:     "razorpay.provider",
   razorpayKeyId:        "razorpay.key_id",
@@ -53,6 +54,7 @@ export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
 export const SENSITIVE_KEYS: ReadonlySet<SettingKey> = new Set([
   SETTING_KEYS.whatsappToken,
   SETTING_KEYS.whatsappVerifyToken,
+  SETTING_KEYS.whatsappAppSecret,
   SETTING_KEYS.razorpayKeySecret,
   SETTING_KEYS.razorpayWebhookSecret,
 ]);
@@ -63,6 +65,7 @@ const ENV_FALLBACK: Partial<Record<SettingKey, string | undefined>> = {
   [SETTING_KEYS.whatsappPhoneId]:     env.WHATSAPP_PHONE_NUMBER_ID,
   [SETTING_KEYS.whatsappToken]:       env.WHATSAPP_ACCESS_TOKEN,
   [SETTING_KEYS.whatsappVerifyToken]: env.WHATSAPP_VERIFY_TOKEN,
+  [SETTING_KEYS.whatsappAppSecret]:   env.WHATSAPP_APP_SECRET,
   [SETTING_KEYS.razorpayProvider]:     env.RAZORPAY_PROVIDER,
   [SETTING_KEYS.razorpayKeyId]:        env.RAZORPAY_KEY_ID,
   [SETTING_KEYS.razorpayKeySecret]:    env.RAZORPAY_KEY_SECRET,

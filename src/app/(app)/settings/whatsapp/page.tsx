@@ -22,11 +22,12 @@ export default async function WhatsAppSettingsPage({
   if (!session?.user || !isAdmin(session.user.role)) redirect("/dashboard");
   const sp = await searchParams;
 
-  const [provider, phoneId, token, verifyToken] = await Promise.all([
+  const [provider, phoneId, token, verifyToken, appSecret] = await Promise.all([
     getSettingPreview(SETTING_KEYS.whatsappProvider),
     getSettingPreview(SETTING_KEYS.whatsappPhoneId),
     getSettingPreview(SETTING_KEYS.whatsappToken),
     getSettingPreview(SETTING_KEYS.whatsappVerifyToken),
+    getSettingPreview(SETTING_KEYS.whatsappAppSecret),
   ]);
 
   // Build absolute webhook URL from the current request host.
@@ -168,6 +169,25 @@ export default async function WhatsAppSettingsPage({
                 />
                 <p className="text-[11px] text-muted-foreground">
                   Leave blank to keep the existing token.
+                </p>
+              </div>
+
+              <div className="space-y-1.5 md:col-span-2">
+                <label htmlFor="appSecret" className="text-sm font-medium">
+                  App Secret <span className="text-amber-700">(required for inbound webhook security)</span>
+                </label>
+                <input
+                  id="appSecret"
+                  name="appSecret"
+                  type="password"
+                  placeholder={appSecret.isSet ? appSecret.preview : "Find in Meta App → Settings → Basic"}
+                  className={inputCls}
+                  autoComplete="off"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Verifies every inbound webhook is genuinely from Meta. Without this set,
+                  the webhook rejects all inbound messages (fail-closed). Leave blank to
+                  keep the existing secret.
                 </p>
               </div>
             </div>

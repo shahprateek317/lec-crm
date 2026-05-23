@@ -1,0 +1,291 @@
+// Tests for the passwordless client portal auth library.
+//
+// The library accepts a small typed store interface (not a full PrismaClient)
+// so we can exercise edge cases without spinning up Postgres. The production
+// code passes the real Prisma client at the call site — the type-shape match
+// is enforced by the interface.
+
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import {
+  generateMagicLink,
+  consumeMagicLink,
+  createClientSession,
+  validateClientSession,
+  MAGIC_LINK_TTL_MIN,
+  CLIENT_SESSION_TTL_DAYS,
+  MAGIC_LINK_RATE_LIMIT,
+  type ClientAuthStore,
+} from "./client-auth";
+
+function makeStore(): ClientAuthStore & {
+  _links: Array<{
+    token: string;
+    clientId: string;
+    expiresAt: Date;
+    consumedAt: Date | null;
+    createdAt: Date;
+    requestIp: string | null;
+  }>;
+  _sessions: Array<{
+    token: string;
+    clientId: string;
+    expiresAt: Date;
+    lastUsedAt: Date;
+    userAgent: string | null;
+  }>;
+} {
+  const links: ReturnType<typeof makeStore>["_links"] = [];
+  const sessions: ReturnType<typeof makeStore>["_sessions"] = [];
+
+  return {
+    _links: links,
+    _sessions: sessions,
+    magicLink: {
+      async create(data) {
+        links.push({
+          token: data.token,
+          clientId: data.clientId,
+          expiresAt: data.expiresAt,
+          consumedAt: null,
+          createdAt: new Date(),
+          requestIp: data.requestIp ?? null,
+        });
+      },
+      async findByToken(token) {
+        return links.find((l) => l.token === token) ?? null;
+      },
+      async countRecent(clientId, since) {
+        return links.filter((l) => l.clientId === clientId && l.createdAt >= since).length;
+      },
+      async markConsumedIfUnconsumed(token, when) {
+        const row = links.find((l) => l.token === token);
+        if (!row || row.consumedAt !== null) return false;
+        row.consumedAt = when;
+        return true;
+      },
+    },
+    session: {
+      async create(data) {
+        sessions.push({
+          token: data.token,
+          clientId: data.clientId,
+          expiresAt: data.expiresAt,
+          lastUsedAt: new Date(),
+          userAgent: data.userAgent ?? null,
+        });
+      },
+      async findByToken(token) {
+        return sessions.find((s) => s.token === token) ?? null;
+      },
+      async touch(token, when, newExpiry) {
+        const row = sessions.find((s) => s.token === token);
+        if (!row) return;
+        row.lastUsedAt = when;
+        if (newExpiry) row.expiresAt = newExpiry;
+      },
+      async delete(token) {
+        const i = sessions.findIndex((s) => s.token === token);
+        if (i >= 0) sessions.splice(i, 1);
+      },
+    },
+  };
+}
+
+describe("generateMagicLink", () => {
+  let store: ReturnType<typeof makeStore>;
+  beforeEach(() => {
+    store = makeStore();
+  });
+
+  it("creates a 192-bit base64url token with a 15-minute TTL", async () => {
+    const before = Date.now();
+    const result = await generateMagicLink(store, "client_abc");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.token).toMatch(/^[A-Za-z0-9_-]{32}$/); // 24 bytes → 32 base64url chars
+    const ttl = result.expiresAt.getTime() - before;
+    expect(ttl).toBeGreaterThan((MAGIC_LINK_TTL_MIN - 1) * 60_000);
+    expect(ttl).toBeLessThanOrEqual(MAGIC_LINK_TTL_MIN * 60_000 + 500);
+  });
+
+  it("persists the link with the clientId and IP", async () => {
+    await generateMagicLink(store, "client_abc", { ip: "203.0.113.5" });
+    expect(store._links).toHaveLength(1);
+    expect(store._links[0]).toMatchObject({
+      clientId: "client_abc",
+      requestIp: "203.0.113.5",
+      consumedAt: null,
+    });
+  });
+
+  it("rate-limits after MAGIC_LINK_RATE_LIMIT.count requests within the window", async () => {
+    for (let i = 0; i < MAGIC_LINK_RATE_LIMIT.count; i++) {
+      const ok = await generateMagicLink(store, "client_abc");
+      expect(ok.ok).toBe(true);
+    }
+    const blocked = await generateMagicLink(store, "client_abc");
+    expect(blocked.ok).toBe(false);
+    if (!blocked.ok) expect(blocked.error).toBe("rate_limited");
+  });
+
+  it("rate limit is per-client, not global", async () => {
+    for (let i = 0; i < MAGIC_LINK_RATE_LIMIT.count; i++) {
+      await generateMagicLink(store, "client_a");
+    }
+    const other = await generateMagicLink(store, "client_b");
+    expect(other.ok).toBe(true);
+  });
+
+  it("rate limit windows past requests out after the period", async () => {
+    // Insert a stale link from 2 hours ago manually
+    store._links.push({
+      token: "old",
+      clientId: "client_abc",
+      expiresAt: new Date(Date.now() - 60 * 60_000),
+      consumedAt: null,
+      createdAt: new Date(Date.now() - 2 * 60 * 60_000),
+      requestIp: null,
+    });
+    for (let i = 0; i < MAGIC_LINK_RATE_LIMIT.count; i++) {
+      const ok = await generateMagicLink(store, "client_abc");
+      expect(ok.ok).toBe(true);
+    }
+    // Stale one shouldn't count against the limit
+  });
+
+  it("each call returns a unique token", async () => {
+    const a = await generateMagicLink(store, "c");
+    const b = await generateMagicLink(store, "c");
+    expect(a.ok && b.ok).toBe(true);
+    if (a.ok && b.ok) expect(a.token).not.toBe(b.token);
+  });
+});
+
+describe("consumeMagicLink", () => {
+  let store: ReturnType<typeof makeStore>;
+  beforeEach(() => {
+    store = makeStore();
+  });
+
+  it("returns the clientId for a valid token and marks it consumed", async () => {
+    const r = await generateMagicLink(store, "client_abc");
+    if (!r.ok) throw new Error("setup failed");
+    const consumed = await consumeMagicLink(store, r.token);
+    expect(consumed.ok).toBe(true);
+    if (consumed.ok) expect(consumed.clientId).toBe("client_abc");
+    expect(store._links[0].consumedAt).not.toBeNull();
+  });
+
+  it("rejects an unknown token", async () => {
+    const result = await consumeMagicLink(store, "bogus");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe("not_found");
+  });
+
+  it("rejects a token that has already been consumed", async () => {
+    const r = await generateMagicLink(store, "c");
+    if (!r.ok) throw new Error("setup");
+    await consumeMagicLink(store, r.token);
+    const second = await consumeMagicLink(store, r.token);
+    expect(second.ok).toBe(false);
+    if (!second.ok) expect(second.error).toBe("already_consumed");
+  });
+
+  it("rejects an expired token", async () => {
+    const r = await generateMagicLink(store, "c");
+    if (!r.ok) throw new Error("setup");
+    // Mutate the row to be expired
+    store._links[0].expiresAt = new Date(Date.now() - 1000);
+    const result = await consumeMagicLink(store, r.token);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe("expired");
+  });
+
+  it("is race-safe: concurrent consumes — only one wins", async () => {
+    const r = await generateMagicLink(store, "c");
+    if (!r.ok) throw new Error("setup");
+    // Simulate two concurrent consume attempts by racing them
+    const [a, b] = await Promise.all([
+      consumeMagicLink(store, r.token),
+      consumeMagicLink(store, r.token),
+    ]);
+    const oks = [a, b].filter((x) => x.ok);
+    const fails = [a, b].filter((x) => !x.ok);
+    expect(oks).toHaveLength(1);
+    expect(fails).toHaveLength(1);
+    // The failing one should specifically be already_consumed (not not_found)
+    const failed = fails[0];
+    if (!failed.ok) expect(failed.error).toBe("already_consumed");
+  });
+});
+
+describe("createClientSession", () => {
+  let store: ReturnType<typeof makeStore>;
+  beforeEach(() => {
+    store = makeStore();
+  });
+
+  it("creates a 192-bit base64url session token with a 30-day expiry", async () => {
+    const before = Date.now();
+    const sess = await createClientSession(store, "client_abc", { userAgent: "iPhone" });
+    expect(sess.token).toMatch(/^[A-Za-z0-9_-]{32}$/);
+    const ttlMs = sess.expiresAt.getTime() - before;
+    expect(ttlMs).toBeGreaterThan((CLIENT_SESSION_TTL_DAYS - 1) * 24 * 60 * 60_000);
+    expect(ttlMs).toBeLessThanOrEqual(CLIENT_SESSION_TTL_DAYS * 24 * 60 * 60_000 + 500);
+    expect(store._sessions[0]).toMatchObject({
+      clientId: "client_abc",
+      userAgent: "iPhone",
+    });
+  });
+});
+
+describe("validateClientSession", () => {
+  let store: ReturnType<typeof makeStore>;
+  beforeEach(() => {
+    store = makeStore();
+  });
+
+  it("returns null for an unknown token", async () => {
+    const result = await validateClientSession(store, "bogus");
+    expect(result).toBeNull();
+  });
+
+  it("returns the clientId for a valid session", async () => {
+    const sess = await createClientSession(store, "client_abc");
+    const result = await validateClientSession(store, sess.token);
+    expect(result).toEqual({ clientId: "client_abc" });
+  });
+
+  it("rejects an expired session", async () => {
+    const sess = await createClientSession(store, "client_abc");
+    store._sessions[0].expiresAt = new Date(Date.now() - 1000);
+    const result = await validateClientSession(store, sess.token);
+    expect(result).toBeNull();
+  });
+
+  it("sliding renewal: extends expiry when more than half the TTL has elapsed", async () => {
+    const sess = await createClientSession(store, "client_abc");
+    const originalExpiry = store._sessions[0].expiresAt.getTime();
+    // Move the lastUsedAt back to simulate the session being old (> half TTL)
+    const halfTtlMs = (CLIENT_SESSION_TTL_DAYS / 2) * 24 * 60 * 60_000;
+    store._sessions[0].lastUsedAt = new Date(Date.now() - halfTtlMs - 1000);
+    await validateClientSession(store, sess.token);
+    expect(store._sessions[0].expiresAt.getTime()).toBeGreaterThan(originalExpiry);
+  });
+
+  it("sliding renewal: does NOT extend if within first half of TTL", async () => {
+    const sess = await createClientSession(store, "client_abc");
+    const originalExpiry = store._sessions[0].expiresAt.getTime();
+    await validateClientSession(store, sess.token);
+    expect(store._sessions[0].expiresAt.getTime()).toBe(originalExpiry);
+  });
+
+  it("always updates lastUsedAt on a valid call", async () => {
+    const sess = await createClientSession(store, "client_abc");
+    const originalLastUsed = store._sessions[0].lastUsedAt.getTime();
+    // Wait a tick
+    await new Promise((r) => setTimeout(r, 5));
+    await validateClientSession(store, sess.token);
+    expect(store._sessions[0].lastUsedAt.getTime()).toBeGreaterThan(originalLastUsed);
+  });
+});
