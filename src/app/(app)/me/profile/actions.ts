@@ -90,11 +90,10 @@ export async function addCertificationAction(formData: FormData) {
     data: {
       userId,
       title:       parsed.data.title,
-      // Placeholder — actual file upload to S3 ships next iteration.
-      // Admins can attach the real file later by patching this row.
-      storageKey:  "pending-upload",
-      contentType: "application/pdf",
-      fileSize:    0,
+      // File attachment is wired separately via Phase 1a #5 — the healer
+      // uploads to S3 and the resulting Document is linked here via the
+      // attachCertificationFileAction below. Metadata-only rows are valid
+      // (documentId stays null) until the file lands.
       issuingBody: parsed.data.issuingBody ?? null,
       issuedAt:    parseMonth(parsed.data.issuedAt),
       expiresAt:   parseMonth(parsed.data.expiresAt),

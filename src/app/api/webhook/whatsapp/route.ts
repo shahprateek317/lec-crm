@@ -19,6 +19,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSetting, SETTING_KEYS } from "@/lib/settings";
 import { verifyWhatsAppSignature } from "@/lib/webhook-signing";
+import { touchThread } from "@/lib/providers/whatsapp";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -102,6 +103,7 @@ export async function POST(req: Request) {
         const phone = "+" + msg.from;
         const client = await prisma.client.findUnique({ where: { phone } });
         const body = msg.text?.body ?? `[${msg.type}]`;
+        const sentAt = new Date(Number(msg.timestamp) * 1000);
         await prisma.whatsAppMessage.create({
           data: {
             clientId: client?.id,
@@ -110,9 +112,18 @@ export async function POST(req: Request) {
             body,
             status: "DELIVERED",
             providerMessageId: msg.id,
-            sentAt: new Date(Number(msg.timestamp) * 1000),
+            sentAt,
           },
         });
+        // Bump the thread aggregate for matched clients. Unknown senders
+        // are handled by /inbox's orphan view (Phase 1b) — no thread row.
+        if (client?.id) {
+          await touchThread({
+            clientId: client.id,
+            direction: "INBOUND",
+            at: sentAt,
+          }).catch((err) => console.error("[whatsapp webhook] inbound thread upsert failed", err));
+        }
       }
     }
   }

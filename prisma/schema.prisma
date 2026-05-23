@@ -43,13 +43,13 @@ enum Gender {
 
 // MCKS-aligned Pranic Healing certifications a healer may hold.
 enum PHLevel {
-  BPH                    // Basic Pranic Healing
-  APH                    // Advanced Pranic Healing
+  BPH // Basic Pranic Healing
+  APH // Advanced Pranic Healing
   PSYCHOTHERAPY
   CRYSTAL_HEALING
   ARHATIC_PREP
-  ACPH                   // Associate Certified Pranic Healer
-  CPH                    // Certified Pranic Healer
+  ACPH // Associate Certified Pranic Healer
+  CPH // Certified Pranic Healer
   KRIYASHAKTI
   TWIN_HEART_TRAINER
   OTHER
@@ -97,50 +97,59 @@ enum MaritalStatus {
 }
 
 model User {
-  id              String    @id @default(cuid())
-  email           String    @unique
-  name            String
-  phone           String?
-  whatsappPhone   String?
-  passwordHash    String
-  role            Role
-  active          Boolean   @default(true)
+  id            String  @id @default(cuid())
+  email         String  @unique
+  name          String
+  phone         String?
+  whatsappPhone String?
+  passwordHash  String
+  role          Role
+  active        Boolean @default(true)
 
   // Common HR/profile fields used across all roles.
-  employeeCode    String?   @unique
-  gender          Gender?
-  dob             DateTime?
-  address         String?
-  areaCity        String?
+  employeeCode     String?   @unique
+  gender           Gender?
+  dob              DateTime?
+  address          String?
+  areaCity         String?
   emergencyContact String?
-  joiningDate     DateTime?
-  profilePhotoUrl String?
-  remarks         String?
-  lastLoginAt     DateTime?
+  joiningDate      DateTime?
+  profilePhotoUrl  String?
+  remarks          String?
+  lastLoginAt      DateTime?
 
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  assignedClients      Client[]           @relation("AssignedCoordinator")
-  counselingSessions   CounselingSession[]
-  visitsAsHealer       Visit[]
-  healingSessions      HealingSession[]
-  healerUpdates        HealerUpdate[]
-  followUps            FollowUp[]
-  stageTransitions     StageTransition[]
-  scheduleBlocks       ScheduleBlock[]
-  sessions             Session[]
-  accounts             Account[]
+  assignedClients    Client[]            @relation("AssignedCoordinator")
+  counselingSessions CounselingSession[]
+  visitsAsHealer     Visit[]
+  healingSessions    HealingSession[]
+  healerUpdates      HealerUpdate[]
+  followUps          FollowUp[]
+  stageTransitions   StageTransition[]
+  scheduleBlocks     ScheduleBlock[]
+  sessions           Session[]
+  accounts           Account[]
 
   // Self-uploaded certifications (healer self-service via /me/profile).
-  certifications       HealerCertificate[]
+  certifications    HealerCertificate[]
   // Inverse relation for the "verified by" admin/QC user.
-  certVerifications    HealerCertificate[] @relation("HealerCertVerifier")
+  certVerifications HealerCertificate[] @relation("HealerCertVerifier")
 
-  healerProfile        HealerProfile?
-  counsellorProfile    CounsellorProfile?
-  coordinatorProfile   CoordinatorProfile?
-  adminProfile         AdminProfile?
+  // Phase 1a additions — back-relations for new models.
+  documents            Document[]       @relation("UserDocuments")
+  documentUploads      Document[]       @relation("UploadedByUser")
+  qualityNotesAuthored QualityNote[]    @relation("QualityNoteAuthor")
+  notifications        Notification[]
+  auditLogEntries      AuditLog[]       @relation("AuditLogActor")
+  threadAssignments    WhatsAppThread[] @relation("ThreadAssignee")
+  threadResolutions    WhatsAppThread[] @relation("ThreadResolver")
+
+  healerProfile      HealerProfile?
+  counsellorProfile  CounsellorProfile?
+  coordinatorProfile CoordinatorProfile?
+  adminProfile       AdminProfile?
 }
 
 // ── Role-specific profiles ───────────────────────────────────────────────
@@ -148,117 +157,117 @@ model User {
 // User small and to make role-specific reporting/queries clean.
 
 model HealerProfile {
-  id                      String   @id @default(cuid())
-  userId                  String   @unique
-  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Professional
-  experienceYears         Int?
-  phLevels                PHLevel[]
-  languages               String[]
-  certificationUrl        String?
+  experienceYears  Int?
+  phLevels         PHLevel[]
+  languages        String[]
+  certificationUrl String?
 
   // Mode preferences
-  acceptsInPerson         Boolean  @default(true)
-  acceptsDistant          Boolean  @default(true)
+  acceptsInPerson Boolean @default(true)
+  acceptsDistant  Boolean @default(true)
 
   // Availability
   // availabilitySlots is the modern source of truth — pairs like "MON:MORNING".
   // preferredTimeBands and availableDays remain for back-compat reports.
-  availabilitySlots       String[]   @default([])
+  availabilitySlots       String[]    @default([])
   preferredTimeBands      TimeBand[]
   availableDays           DayOfWeek[]
   maxHealingsPerDay       Int?
-  daysPriorNoticeRequired Int      @default(0)
-  emergencySameDay        Boolean  @default(false)
+  daysPriorNoticeRequired Int         @default(0)
+  emergencySameDay        Boolean     @default(false)
 
   // Location
-  canVisitCentre          Boolean  @default(true)
-  homeVisitPossible       Boolean  @default(false)
+  canVisitCentre    Boolean @default(true)
+  homeVisitPossible Boolean @default(false)
 
   // Assignment preferences
-  acceptsDemoFree         Boolean  @default(true)
-  acceptsPaidOnly         Boolean  @default(false)
-  acceptsNewLeads         Boolean  @default(true)
-  prefersRepeatClients    Boolean  @default(false)
+  acceptsDemoFree      Boolean @default(true)
+  acceptsPaidOnly      Boolean @default(false)
+  acceptsNewLeads      Boolean @default(true)
+  prefersRepeatClients Boolean @default(false)
 
   // Focus areas (free-form tags; future: enum)
-  focusAreas              String[]
+  focusAreas String[]
 
   // Commercial
-  perSessionCharge        Int?
-  demoSessionCharge       Int?
-  revenueSharePercent     Int?
-  paymentMode             String?  // UPI | Bank | Cash | Other
+  perSessionCharge    Int?
+  demoSessionCharge   Int?
+  revenueSharePercent Int?
+  paymentMode         String? // UPI | Bank | Cash | Other
 
   // Strategic toggles (dad's section 10)
-  acceptsUrgentCases      Boolean  @default(false)
-  acceptsChildCases       Boolean  @default(true)
-  acceptsElderlyCases     Boolean  @default(true)
-  weekendAvailable        Boolean  @default(false)
-  groupHealingAvailable   Boolean  @default(false)
+  acceptsUrgentCases    Boolean @default(false)
+  acceptsChildCases     Boolean @default(true)
+  acceptsElderlyCases   Boolean @default(true)
+  weekendAvailable      Boolean @default(false)
+  groupHealingAvailable Boolean @default(false)
 
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model CounsellorProfile {
-  id                    String     @id @default(cuid())
-  userId                String     @unique
-  user                  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  experienceYears       Int?
-  languages             String[]
-  specializations       String[]   // Stress, Anxiety, Emotional Healing, etc.
+  experienceYears Int?
+  languages       String[]
+  specializations String[] // Stress, Anxiety, Emotional Healing, etc.
 
-  acceptsOnline         Boolean    @default(true)
-  acceptsOffline        Boolean    @default(true)
-  availabilitySlots     String[]   @default([])
-  preferredTimeBands    TimeBand[]
-  maxSessionsPerDay     Int?
+  acceptsOnline      Boolean    @default(true)
+  acceptsOffline     Boolean    @default(true)
+  availabilitySlots  String[]   @default([])
+  preferredTimeBands TimeBand[]
+  maxSessionsPerDay  Int?
 
   // CRM permissions
-  canCloseLead          Boolean    @default(false)
-  canAssignVisit        Boolean    @default(true)
-  incentiveEligible     Boolean    @default(true)
+  canCloseLead      Boolean @default(false)
+  canAssignVisit    Boolean @default(true)
+  incentiveEligible Boolean @default(true)
 
-  createdAt             DateTime   @default(now())
-  updatedAt             DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model CoordinatorProfile {
-  id                      String   @id @default(cuid())
-  userId                  String   @unique
-  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  handlesLeads            Boolean  @default(true)
-  handlesFollowUp         Boolean  @default(true)
-  handlesWhatsAppGroups   Boolean  @default(true)
-  handlesPaymentFollowUp  Boolean  @default(true)
-  handlesScheduling       Boolean  @default(true)
+  handlesLeads           Boolean @default(true)
+  handlesFollowUp        Boolean @default(true)
+  handlesWhatsAppGroups  Boolean @default(true)
+  handlesPaymentFollowUp Boolean @default(true)
+  handlesScheduling      Boolean @default(true)
 
-  maxCallsPerDay          Int?
-  shiftTiming             String?  // e.g. "10:00–18:00"
-  languages               String[]
+  maxCallsPerDay Int?
+  shiftTiming    String? // e.g. "10:00–18:00"
+  languages      String[]
 
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model AdminProfile {
-  id                  String   @id @default(cuid())
-  userId              String   @unique
-  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  isSuperAdmin        Boolean  @default(false)
-  fullCrmAccess       Boolean  @default(true)
-  userCreationRights  Boolean  @default(true)
-  reportAccess        Boolean  @default(true)
-  financeAccess       Boolean  @default(true)
-  dashboardAccess     Boolean  @default(true)
+  isSuperAdmin       Boolean @default(false)
+  fullCrmAccess      Boolean @default(true)
+  userCreationRights Boolean @default(true)
+  reportAccess       Boolean @default(true)
+  financeAccess      Boolean @default(true)
+  dashboardAccess    Boolean @default(true)
 
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // NextAuth.js v5 tables
@@ -317,7 +326,7 @@ enum LeadSource {
 model AppSetting {
   id          String   @id @default(cuid())
   key         String   @unique
-  value       String   // plaintext or base64(iv || ciphertext || authTag) when encrypted
+  value       String // plaintext or base64(iv || ciphertext || authTag) when encrypted
   encrypted   Boolean  @default(false)
   updatedAt   DateTime @updatedAt
   updatedById String?
@@ -383,80 +392,91 @@ enum PreferredTimeSlot {
 }
 
 model Client {
-  id               String         @id @default(cuid())
-  name             String
-  phone            String         @unique
-  email            String?
-  age              Int?
-  ageBucket        AgeBucket?
-  gender           Gender?
-  maritalStatus    MaritalStatus?
-  occupation       String?
-  referredBy       String?        // free-text source label ("Friend Anita", "Instagram", "Dr Sharma")
+  id                     String             @id @default(cuid())
+  name                   String
+  phone                  String             @unique
+  email                  String?
+  age                    Int?
+  ageBucket              AgeBucket?
+  gender                 Gender?
+  maritalStatus          MaritalStatus?
+  occupation             String?
+  referredBy             String? // free-text source label ("Friend Anita", "Instagram", "Dr Sharma")
   // Programmatic referrer link (Client → Client) for the rewards engine.
   // `referredBy` stays for the free-form acquisition channel; `referrerClientId`
   // captures the actual client who sent them, so we can credit that client.
-  referrerClientId String?
-  referrer         Client?        @relation("ClientReferrals", fields: [referrerClientId], references: [id])
-  referrals        Client[]       @relation("ClientReferrals")
+  referrerClientId       String?
+  referrer               Client?            @relation("ClientReferrals", fields: [referrerClientId], references: [id])
+  referrals              Client[]           @relation("ClientReferrals")
   // Healing credits awarded for successful referrals — tracked separately from
   // purchased credits so we can show the client what they've earned.
-  healingCreditsEarned Int        @default(0)
-  area             String?        // free-text: either the picked area or the "specify" fallback
-  areaCategory     AreaCategory?
-  issue            String?        // free-text brief
-  issueCategory    IssueCategory?
-  secondaryConcerns String[]      // multi-select free-form tags
+  healingCreditsEarned   Int                @default(0)
+  area                   String? // free-text: either the picked area or the "specify" fallback
+  areaCategory           AreaCategory?
+  issue                  String? // free-text brief
+  issueCategory          IssueCategory?
+  secondaryConcerns      String[] // multi-select free-form tags
   takingMedicalTreatment Boolean? // optional yes/no
-  issueRefined     String?        // post-counselling refinement
-  issueDuration    String?        // free text
-  durationBucket   DurationBucket?
-  preferredTimeSlot PreferredTimeSlot?
-  severity         Int?           // 1-10
-  leadScore        Int            @default(0) // computed nudge for prioritisation
-  source           LeadSource     @default(MANUAL)
-  stage            PipelineStage  @default(NEW)
-  assignedToId    String?
-  assignedTo      User?          @relation("AssignedCoordinator", fields: [assignedToId], references: [id])
-  notes           String?
-  lostReason      String?
-  convertedAt     DateTime?
-  lastContactedAt DateTime?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  issueRefined           String? // post-counselling refinement
+  issueDuration          String? // free text
+  durationBucket         DurationBucket?
+  preferredTimeSlot      PreferredTimeSlot?
+  severity               Int? // 1-10
+  leadScore              Int                @default(0) // computed nudge for prioritisation
+  source                 LeadSource         @default(MANUAL)
+  stage                  PipelineStage      @default(NEW)
+  assignedToId           String?
+  assignedTo             User?              @relation("AssignedCoordinator", fields: [assignedToId], references: [id])
+  notes                  String?
+  lostReason             String?
+  convertedAt            DateTime?
+  lastContactedAt        DateTime?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  // DPDP-2025 lifecycle: soft-delete window before hard delete. A nightly
+  // job hard-deletes rows where deletedAt < now() - 30 days. Identity fields
+  // are anonymised on soft-delete; HealingSession history is retained for
+  // healer revenue records but its FK to this row stays intact.
+  deletedAt              DateTime?
 
-  counselingSessions   CounselingSession[]
-  visits               Visit[]
-  healingSessions      HealingSession[]
-  payments             Payment[]
-  creditEntries        CreditLedgerEntry[]
-  distantHealingGroup  DistantHealingGroup?
-  feedbackEntries      ClientFeedback[]
-  followUps            FollowUp[]
-  whatsappMessages     WhatsAppMessage[]
-  enrollments          Enrollment[]
-  stageTransitions     StageTransition[]
+  counselingSessions       CounselingSession[]
+  visits                   Visit[]
+  healingSessions          HealingSession[]
+  payments                 Payment[]
+  creditEntries            CreditLedgerEntry[]
+  distantHealingGroup      DistantHealingGroup?
+  feedbackEntries          ClientFeedback[]
+  followUps                FollowUp[]
+  whatsappMessages         WhatsAppMessage[]
+  enrollments              Enrollment[]
+  stageTransitions         StageTransition[]
   // Referral rewards this client has earned (as the referrer) and the ones
   // they've triggered as the referee. Kept on both sides for easy querying.
-  referralRewardsEarned ReferralReward[] @relation("ReferralRewardsAsReferrer")
-  referralRewardsAsReferee ReferralReward[] @relation("ReferralRewardsAsReferee")
+  referralRewardsEarned    ReferralReward[]     @relation("ReferralRewardsAsReferrer")
+  referralRewardsAsReferee ReferralReward[]     @relation("ReferralRewardsAsReferee")
+  // Phase 1a additions — back-relations.
+  documents                Document[]           @relation("ClientDocuments")
+  whatsappThread           WhatsAppThread?
+  magicLinks               ClientMagicLink[]
+  portalSessions           ClientSession[]
 
   @@index([stage])
   @@index([assignedToId])
   @@index([createdAt])
   @@index([referrerClientId])
+  @@index([deletedAt])
 }
 
 model StageTransition {
-  id         String         @id @default(cuid())
-  clientId   String
-  client     Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  fromStage  PipelineStage?
-  toStage    PipelineStage
-  byUserId   String?
-  byUser     User?          @relation(fields: [byUserId], references: [id])
-  note       String?
-  at         DateTime       @default(now())
+  id        String         @id @default(cuid())
+  clientId  String
+  client    Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  fromStage PipelineStage?
+  toStage   PipelineStage
+  byUserId  String?
+  byUser    User?          @relation(fields: [byUserId], references: [id])
+  note      String?
+  at        DateTime       @default(now())
 
   @@index([clientId, at])
 }
@@ -484,17 +504,17 @@ model CounselingSession {
 }
 
 model Visit {
-  id              String    @id @default(cuid())
-  clientId        String
-  client          Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  id               String    @id @default(cuid())
+  clientId         String
+  client           Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
   assignedHealerId String?
-  assignedHealer   User?    @relation(fields: [assignedHealerId], references: [id])
-  scheduledAt     DateTime
-  visitedAt       DateTime?
-  initialFeedback String?
-  notes           String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  assignedHealer   User?     @relation(fields: [assignedHealerId], references: [id])
+  scheduledAt      DateTime
+  visitedAt        DateTime?
+  initialFeedback  String?
+  notes            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   @@index([clientId])
   @@index([scheduledAt])
@@ -579,34 +599,34 @@ model ScheduleBlock {
 }
 
 model HealingSession {
-  id         String        @id @default(cuid())
-  clientId   String
-  client     Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  healerId   String
-  healer     User          @relation(fields: [healerId], references: [id])
-  mode       HealingMode   @default(IN_PERSON)
-  sessionType HealingSessionType @default(PAID)
-  date       DateTime      @default(now())
-  chakras    Chakra[]
+  id                       String             @id @default(cuid())
+  clientId                 String
+  client                   Client             @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  healerId                 String
+  healer                   User               @relation(fields: [healerId], references: [id])
+  mode                     HealingMode        @default(IN_PERSON)
+  sessionType              HealingSessionType @default(PAID)
+  date                     DateTime           @default(now())
+  chakras                  Chakra[]
   // Map of chakra-key → status. Stored as JSON so we can evolve the chakra
   // list without migrations. Keys come from CHAKRA_KEYS in
   // src/lib/healing-session.ts; values are ChakraState ("BALANCED" / etc).
-  chakraStatesBefore Json?
-  chakraStatesAfter  Json?
-  cleansingActions   CleansingAction[]   @default([])
-  energisingActions  EnergisingAction[]  @default([])
+  chakraStatesBefore       Json?
+  chakraStatesAfter        Json?
+  cleansingActions         CleansingAction[]  @default([])
+  energisingActions        EnergisingAction[] @default([])
   // Sum of (after-score − before-score) across all rated chakras.
   // Higher = more positive change. Computed by logHealingSession() on save.
-  improvementScore   Int                 @default(0)
-  colorsUsed PranicColor[]
-  process    String?       // e.g. "cleansing", "energising", "general sweeping"
-  durationMinutes Int?
-  remarks    String?
-  clientResponse String?
-  followUpNeeded Boolean   @default(false)
+  improvementScore         Int                @default(0)
+  colorsUsed               PranicColor[]
+  process                  String? // e.g. "cleansing", "energising", "general sweeping"
+  durationMinutes          Int?
+  remarks                  String?
+  clientResponse           String?
+  followUpNeeded           Boolean            @default(false)
   nextSessionRecommendedAt DateTime?
-  creditUsed Boolean       @default(true) // false for complimentary sessions
-  createdAt  DateTime      @default(now())
+  creditUsed               Boolean            @default(true) // false for complimentary sessions
+  createdAt                DateTime           @default(now())
 
   // ── Session check-in / check-out (replaces dad's "OTP at start/end") ──
   // Healer taps Start → client gets a one-tap confirmation link in WhatsApp;
@@ -616,15 +636,16 @@ model HealingSession {
   // `startCheckInToken` / `endCheckInToken` are single-use random URLs.
   // `startedAt` is when healer initiated; `clientConfirmedStartAt` is the
   // proof. Discrepancy between them flags an audit issue in /quality.
-  startedAt                DateTime?
-  startCheckInToken        String?   @unique
-  clientConfirmedStartAt   DateTime?
-  endedAt                  DateTime?
-  endCheckInToken          String?   @unique
-  clientConfirmedEndAt     DateTime?
+  startedAt              DateTime?
+  startCheckInToken      String?   @unique
+  clientConfirmedStartAt DateTime?
+  endedAt                DateTime?
+  endCheckInToken        String?   @unique
+  clientConfirmedEndAt   DateTime?
 
-  creditEntry   CreditLedgerEntry?
-  feedback      ClientFeedback?
+  creditEntry  CreditLedgerEntry?
+  feedback     ClientFeedback?
+  qualityNotes QualityNote[]
 
   @@index([clientId, date])
   @@index([healerId, date])
@@ -637,13 +658,13 @@ model HealingSession {
 model CreditPackage {
   id        String   @id @default(cuid())
   name      String
-  amount    Int      // INR, no paise
+  amount    Int // INR, no paise
   credits   Int
   active    Boolean  @default(true)
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
 
-  payments  Payment[]
+  payments Payment[]
 }
 
 enum PaymentStatus {
@@ -660,25 +681,25 @@ enum PaymentProvider {
 }
 
 model Payment {
-  id                      String         @id @default(cuid())
-  clientId                String
-  client                  Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  packageId               String?
-  package                 CreditPackage? @relation(fields: [packageId], references: [id])
-  amount                  Int            // INR
-  creditsGranted          Int            @default(0)
-  provider                PaymentProvider @default(RAZORPAY)
-  providerPaymentLinkId   String?
-  providerPaymentLinkUrl  String?
-  providerPaymentId       String?
-  status                  PaymentStatus  @default(PENDING)
-  paidAt                  DateTime?
-  notes                   String?
-  createdAt               DateTime       @default(now())
-  updatedAt               DateTime       @updatedAt
+  id                     String          @id @default(cuid())
+  clientId               String
+  client                 Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  packageId              String?
+  package                CreditPackage?  @relation(fields: [packageId], references: [id])
+  amount                 Int // INR
+  creditsGranted         Int             @default(0)
+  provider               PaymentProvider @default(RAZORPAY)
+  providerPaymentLinkId  String?
+  providerPaymentLinkUrl String?
+  providerPaymentId      String?
+  status                 PaymentStatus   @default(PENDING)
+  paidAt                 DateTime?
+  notes                  String?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
 
-  creditEntry             CreditLedgerEntry?
-  enrollment              Enrollment?        @relation("EnrollmentPayment")
+  creditEntry CreditLedgerEntry?
+  enrollment  Enrollment?        @relation("EnrollmentPayment")
 
   @@index([clientId])
   @@index([status])
@@ -687,17 +708,17 @@ model Payment {
 // Credit ledger: +delta for purchases / adjustments, -delta for usage.
 // Running balance derived, stored for fast read.
 model CreditLedgerEntry {
-  id                String          @id @default(cuid())
-  clientId          String
-  client            Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  delta             Int             // positive or negative
-  balanceAfter      Int
-  reason            String          // "Package purchase", "Healing session", "Course adjustment", etc.
-  healingSessionId  String?         @unique
-  healingSession    HealingSession? @relation(fields: [healingSessionId], references: [id])
-  paymentId         String?         @unique
-  payment           Payment?        @relation(fields: [paymentId], references: [id])
-  at                DateTime        @default(now())
+  id               String          @id @default(cuid())
+  clientId         String
+  client           Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  delta            Int // positive or negative
+  balanceAfter     Int
+  reason           String // "Package purchase", "Healing session", "Course adjustment", etc.
+  healingSessionId String?         @unique
+  healingSession   HealingSession? @relation(fields: [healingSessionId], references: [id])
+  paymentId        String?         @unique
+  payment          Payment?        @relation(fields: [paymentId], references: [id])
+  at               DateTime        @default(now())
 
   @@index([clientId, at])
 }
@@ -707,46 +728,46 @@ model CreditLedgerEntry {
 // ──────────────────────────────────────────────────────────────────────────
 
 model DistantHealingGroup {
-  id                 String         @id @default(cuid())
-  clientId           String         @unique
-  client             Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  whatsappGroupName  String?
-  whatsappGroupLink  String?
-  photoUrl           String?        // client photo for standard data format
-  problemAreas       String?
-  active             Boolean        @default(true)
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
+  id                String   @id @default(cuid())
+  clientId          String   @unique
+  client            Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  whatsappGroupName String?
+  whatsappGroupLink String?
+  photoUrl          String? // client photo for standard data format
+  problemAreas      String?
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  healerUpdates      HealerUpdate[]
+  healerUpdates HealerUpdate[]
 }
 
 model HealerUpdate {
-  id                  String              @id @default(cuid())
-  distantGroupId      String
-  distantGroup        DistantHealingGroup @relation(fields: [distantGroupId], references: [id], onDelete: Cascade)
-  healerId            String
-  healer              User                @relation(fields: [healerId], references: [id])
-  date                DateTime            @default(now())
-  chakras             Chakra[]
-  process             String?
-  durationMinutes     Int?
-  remarks             String?
-  postedToWhatsAppAt  DateTime?
-  createdAt           DateTime            @default(now())
+  id                 String              @id @default(cuid())
+  distantGroupId     String
+  distantGroup       DistantHealingGroup @relation(fields: [distantGroupId], references: [id], onDelete: Cascade)
+  healerId           String
+  healer             User                @relation(fields: [healerId], references: [id])
+  date               DateTime            @default(now())
+  chakras            Chakra[]
+  process            String?
+  durationMinutes    Int?
+  remarks            String?
+  postedToWhatsAppAt DateTime?
+  createdAt          DateTime            @default(now())
 
   @@index([distantGroupId, date])
 }
 
 model ClientFeedback {
-  id                String          @id @default(cuid())
-  clientId          String
-  client            Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  healingSessionId  String?         @unique
-  healingSession    HealingSession? @relation(fields: [healingSessionId], references: [id])
-  content           String
-  rating            Int?            // 1-5
-  submittedAt       DateTime        @default(now())
+  id               String          @id @default(cuid())
+  clientId         String
+  client           Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  healingSessionId String?         @unique
+  healingSession   HealingSession? @relation(fields: [healingSessionId], references: [id])
+  content          String
+  rating           Int? // 1-5
+  submittedAt      DateTime        @default(now())
 
   @@index([clientId, submittedAt])
 }
@@ -775,18 +796,18 @@ enum FollowUpReason {
 }
 
 model FollowUp {
-  id          String         @id @default(cuid())
-  clientId    String
-  client      Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  id           String         @id @default(cuid())
+  clientId     String
+  client       Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
   assignedToId String?
-  assignedTo   User?         @relation(fields: [assignedToId], references: [id])
-  reason      FollowUpReason
-  status      FollowUpStatus @default(PENDING)
-  dueAt       DateTime
-  note        String?
-  completedAt DateTime?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  assignedTo   User?          @relation(fields: [assignedToId], references: [id])
+  reason       FollowUpReason
+  status       FollowUpStatus @default(PENDING)
+  dueAt        DateTime
+  note         String?
+  completedAt  DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 
   @@index([status, dueAt])
   @@index([clientId])
@@ -812,36 +833,36 @@ enum WhatsAppStatus {
 // WhatsApp Cloud API requires pre-approved templates for proactive messages.
 // We store the template definition here; the actual approval lives with Meta.
 model WhatsAppTemplate {
-  id            String    @id @default(cuid())
-  name          String    @unique   // matches Meta template name
-  category      String                // e.g. UTILITY, MARKETING
-  language      String    @default("en")
-  bodyTemplate  String                // with {{1}}, {{2}} placeholders
-  description   String?
-  active        Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id           String   @id @default(cuid())
+  name         String   @unique // matches Meta template name
+  category     String // e.g. UTILITY, MARKETING
+  language     String   @default("en")
+  bodyTemplate String // with {{1}}, {{2}} placeholders
+  description  String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  messages      WhatsAppMessage[]
+  messages WhatsAppMessage[]
 }
 
 model WhatsAppMessage {
-  id                  String             @id @default(cuid())
-  clientId            String?
-  client              Client?            @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  templateId          String?
-  template            WhatsAppTemplate?  @relation(fields: [templateId], references: [id])
-  phone               String
-  direction           WhatsAppDirection  @default(OUTBOUND)
-  body                String
-  status              WhatsAppStatus     @default(QUEUED)
-  providerMessageId   String?
-  errorMessage        String?
-  scheduledFor        DateTime?
-  sentAt              DateTime?
-  deliveredAt         DateTime?
-  readAt              DateTime?
-  createdAt           DateTime           @default(now())
+  id                String            @id @default(cuid())
+  clientId          String?
+  client            Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  templateId        String?
+  template          WhatsAppTemplate? @relation(fields: [templateId], references: [id])
+  phone             String
+  direction         WhatsAppDirection @default(OUTBOUND)
+  body              String
+  status            WhatsAppStatus    @default(QUEUED)
+  providerMessageId String?
+  errorMessage      String?
+  scheduledFor      DateTime?
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  readAt            DateTime?
+  createdAt         DateTime          @default(now())
 
   @@index([clientId, createdAt])
   @@index([status])
@@ -852,15 +873,15 @@ model WhatsAppMessage {
 // ──────────────────────────────────────────────────────────────────────────
 
 model Course {
-  id          String    @id @default(cuid())
-  name        String    @unique
-  description String?
-  fee         Int       // INR
+  id            String   @id @default(cuid())
+  name          String   @unique
+  description   String?
+  fee           Int // INR
   durationHours Int?
-  active      Boolean   @default(true)
-  sortOrder   Int       @default(0)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  active        Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   prerequisites   CoursePrerequisite[] @relation("CoursePrereqs")
   prerequisiteFor CoursePrerequisite[] @relation("CourseUnlocks")
@@ -868,11 +889,11 @@ model Course {
 }
 
 model CoursePrerequisite {
-  id              String  @id @default(cuid())
-  courseId        String  // the course that requires...
-  course          Course  @relation("CoursePrereqs", fields: [courseId], references: [id], onDelete: Cascade)
-  prerequisiteId  String  // ...this prerequisite
-  prerequisite    Course  @relation("CourseUnlocks", fields: [prerequisiteId], references: [id], onDelete: Cascade)
+  id             String @id @default(cuid())
+  courseId       String // the course that requires...
+  course         Course @relation("CoursePrereqs", fields: [courseId], references: [id], onDelete: Cascade)
+  prerequisiteId String // ...this prerequisite
+  prerequisite   Course @relation("CourseUnlocks", fields: [prerequisiteId], references: [id], onDelete: Cascade)
 
   @@unique([courseId, prerequisiteId])
 }
@@ -886,20 +907,20 @@ enum EnrollmentStatus {
 }
 
 model Enrollment {
-  id                   String           @id @default(cuid())
-  clientId             String
-  client               Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  courseId             String
-  course               Course           @relation(fields: [courseId], references: [id])
-  status               EnrollmentStatus @default(PENDING_PAYMENT)
-  feePaid              Int              @default(0)
-  creditsAdjustedAmount Int             @default(0) // prepaid healing credits credited to course fee
-  paymentId            String?          @unique
-  payment              Payment?         @relation("EnrollmentPayment", fields: [paymentId], references: [id])
-  enrolledAt           DateTime?
-  completedAt          DateTime?
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
+  id                    String           @id @default(cuid())
+  clientId              String
+  client                Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  courseId              String
+  course                Course           @relation(fields: [courseId], references: [id])
+  status                EnrollmentStatus @default(PENDING_PAYMENT)
+  feePaid               Int              @default(0)
+  creditsAdjustedAmount Int              @default(0) // prepaid healing credits credited to course fee
+  paymentId             String?          @unique
+  payment               Payment?         @relation("EnrollmentPayment", fields: [paymentId], references: [id])
+  enrolledAt            DateTime?
+  completedAt           DateTime?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
 
   @@unique([clientId, courseId])
   @@index([status])
@@ -915,7 +936,7 @@ model Enrollment {
 // the referrer's `healingCreditsEarned`; usually 1 but kept configurable.
 
 enum ReferralReason {
-  CENTRE_VISIT     // referee completed their first centre visit
+  CENTRE_VISIT // referee completed their first centre visit
   PACKAGE_PURCHASE // referee bought any healing package
   COURSE_ENROLMENT // referee enrolled in a paid course (bonus path)
 }
@@ -929,23 +950,24 @@ enum ReferralReason {
 // admins or the healer themselves).
 
 model HealerCertificate {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title       String   // free text e.g. "Basic Pranic Healing (MCKS) — Mar 2018"
-  storageKey  String   // S3 object key, e.g. "healer-certs/<userId>/<cuid>.pdf"
-  contentType String   // image/png, application/pdf, etc.
-  fileSize    Int      // bytes
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title        String // free text e.g. "Basic Pranic Healing (MCKS) — Mar 2018"
+  // FK into the polymorphic Document model. Nullable until the healer
+  // actually attaches a file — metadata can be entered before upload.
+  documentId   String?   @unique
+  document     Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
   // Optional self-reported metadata so admin / quality controller can verify
   // without opening the file every time.
-  issuingBody String?  // "MCKS Institute of Inner Studies", "World Pranic Healing Foundation", etc.
-  issuedAt    DateTime?
-  expiresAt   DateTime?
-  verifiedAt  DateTime? // null = pending review; set when admin/QC marks verified
+  issuingBody  String? // "MCKS Institute of Inner Studies", "World Pranic Healing Foundation", etc.
+  issuedAt     DateTime?
+  expiresAt    DateTime?
+  verifiedAt   DateTime? // null = pending review; set when admin/QC marks verified
   verifiedById String?
-  verifiedBy   User?   @relation("HealerCertVerifier", fields: [verifiedById], references: [id])
-  notes       String?  // free text from the verifier
-  createdAt   DateTime @default(now())
+  verifiedBy   User?     @relation("HealerCertVerifier", fields: [verifiedById], references: [id])
+  notes        String? // free text from the verifier
+  createdAt    DateTime  @default(now())
 
   @@index([userId])
 }
@@ -961,9 +983,235 @@ model ReferralReward {
   note            String?
   createdAt       DateTime       @default(now())
 
-  @@index([referrerId])
-  @@index([refereeId])
   // Same reason can only fire once per (referrer, referee) — prevents
   // double-credits if a hook re-runs.
   @@unique([referrerId, refereeId, reason])
+  @@index([referrerId])
+  @@index([refereeId])
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Phase 1a additions — see docs/UX_ARCHITECTURE.md sections 3, 5, 6, 7, 8a, 8b
+// ──────────────────────────────────────────────────────────────────────────
+
+// ── Documents (polymorphic file storage) ──────────────────────────────────
+// Every uploaded file (healer cert, client medical report, profile photo)
+// lives here. Ownership is polymorphic via two nullable FKs + a CHECK
+// constraint that exactly one is set — the migration adds the CHECK.
+// Cascade deletes flow from User/Client to Document; an out-of-band
+// reconciler nightly removes S3 objects for soft-deleted rows.
+
+enum DocumentKind {
+  HEALER_CERT
+  MEDICAL_REPORT
+  PROFILE_PHOTO
+  OTHER
+}
+
+enum DocumentStatus {
+  PENDING // presigned URL issued, awaiting browser upload
+  UPLOADED // confirmed visible in S3
+  FAILED // upload abandoned / 4xx response
+}
+
+model Document {
+  id            String         @id @default(cuid())
+  kind          DocumentKind
+  // Polymorphic ownership — exactly one must be set. CHECK constraint
+  // enforced by migration SQL (Prisma doesn't model CHECK natively).
+  ownerUserId   String?
+  ownerUser     User?          @relation("UserDocuments", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  ownerClientId String?
+  ownerClient   Client?        @relation("ClientDocuments", fields: [ownerClientId], references: [id], onDelete: Cascade)
+  storageKey    String         @unique // S3 object key
+  filename      String
+  contentType   String
+  sizeBytes     Int?
+  status        DocumentStatus @default(PENDING)
+  uploadedById  String? // who initiated the upload (may differ from owner)
+  uploadedBy    User?          @relation("UploadedByUser", fields: [uploadedById], references: [id])
+  uploadedAt    DateTime?
+  createdAt     DateTime       @default(now())
+
+  // Inverse — when this Document is referenced by a HealerCertificate.
+  healerCertificate HealerCertificate?
+
+  @@index([ownerUserId])
+  @@index([ownerClientId])
+  @@index([kind, createdAt])
+}
+
+// ── WhatsApp inbox triage ────────────────────────────────────────────────
+// One row per client, capturing the mutable triage state on top of the
+// immutable WhatsAppMessage log. Inbound webhook upserts; outbound resets
+// unreadCount; coordinator actions mutate status / assignee / snoozeUntil.
+
+enum ThreadStatus {
+  OPEN
+  SNOOZED
+  RESOLVED
+}
+
+model WhatsAppThread {
+  id             String       @id @default(cuid())
+  clientId       String       @unique
+  client         Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  status         ThreadStatus @default(OPEN)
+  assigneeId     String?
+  assignee       User?        @relation("ThreadAssignee", fields: [assigneeId], references: [id])
+  snoozeUntil    DateTime?
+  escalated      Boolean      @default(false)
+  resolvedAt     DateTime?
+  resolvedById   String?
+  resolvedBy     User?        @relation("ThreadResolver", fields: [resolvedById], references: [id])
+  lastInboundAt  DateTime?
+  lastOutboundAt DateTime?
+  unreadCount    Int          @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([status, assigneeId])
+  @@index([status, lastInboundAt])
+  @@index([snoozeUntil])
+}
+
+// ── Quality audit notes ──────────────────────────────────────────────────
+// Per-session audit by Quality Controllers. Append-only — once a note is
+// written it can be acknowledged or escalated but never edited or deleted.
+
+enum QualityRating {
+  POOR
+  FAIR
+  GOOD
+  VERY_GOOD
+  EXCELLENT
+}
+
+model QualityNote {
+  id                     String         @id @default(cuid())
+  sessionId              String
+  session                HealingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  authorId               String
+  author                 User           @relation("QualityNoteAuthor", fields: [authorId], references: [id])
+  rating                 QualityRating?
+  note                   String
+  needsHealerAttention   Boolean        @default(false)
+  escalated              Boolean        @default(false)
+  acknowledgedByHealerAt DateTime?
+  createdAt              DateTime       @default(now())
+
+  @@index([sessionId])
+  @@index([authorId, createdAt])
+}
+
+// ── Notifications (in-app for staff) ─────────────────────────────────────
+// Time-critical work-feed items. Surfaces in the staff bell icon. Email
+// digests are a Phase 2 derivative.
+
+enum NotificationKind {
+  NEW_INBOUND_MESSAGE
+  NEW_HEALING_ASSIGNMENT
+  SESSION_REMINDER_1H
+  CLIENT_DID_NOT_CONFIRM_START
+  QC_FLAGGED_SESSION
+  CERT_VERIFIED
+  REFERRAL_REWARD_GRANTED
+  PAYMENT_RECEIVED
+  COURSE_ENROLMENT
+  OTHER
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  recipientId String
+  recipient   User             @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  kind        NotificationKind
+  title       String
+  body        String?
+  href        String?
+  readAt      DateTime?
+  createdAt   DateTime         @default(now())
+
+  @@index([recipientId, readAt])
+  @@index([recipientId, createdAt])
+}
+
+// ── Audit log (DPDP / insider-risk) ──────────────────────────────────────
+// Who accessed what. Required by India's DPDP Act 2025 if questioned.
+// Append-only; admins read at /settings/audit-log.
+
+enum AuditAction {
+  DOCUMENT_VIEWED
+  DOCUMENT_DOWNLOADED
+  CLIENT_DATA_EXPORTED
+  CLIENT_SOFT_DELETED
+  CLIENT_HARD_DELETED
+  WHATSAPP_THREAD_OPENED
+  HEALING_SESSION_VIEWED
+  USER_CREATED
+  USER_DISABLED
+  USER_ROLE_CHANGED
+  SETTING_CHANGED
+  CERT_VERIFIED
+}
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  actorId    String
+  actor      User        @relation("AuditLogActor", fields: [actorId], references: [id])
+  action     AuditAction
+  targetType String // "Client" | "Document" | "HealingSession" | "User" | ...
+  targetId   String
+  meta       Json? // additional context (download UA, prev/next values, etc.)
+  ip         String?
+  at         DateTime    @default(now())
+
+  @@index([actorId, at])
+  @@index([targetType, targetId, at])
+  @@index([action, at])
+}
+
+// ── Client portal auth (passwordless) ────────────────────────────────────
+// Magic link + OTP delivered together in one WhatsApp template; client
+// self-selects which to use. Both stored as SHA-256 hashes — plaintext
+// never persisted. See docs/UX_ARCHITECTURE.md §3.
+
+enum LinkConsumeMethod {
+  OTP
+  LINK
+}
+
+model ClientMagicLink {
+  id          String             @id @default(cuid())
+  // SHA-256 hex of the 24-byte base64url link token. Plaintext never stored.
+  tokenHash   String             @unique
+  // SHA-256 hex of the 6-digit OTP. Plaintext never stored.
+  otpHash     String
+  otpAttempts Int                @default(0)
+  clientId    String
+  client      Client             @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  consumedVia LinkConsumeMethod?
+  createdAt   DateTime           @default(now())
+  requestIp   String?
+
+  @@index([clientId, createdAt])
+  @@index([expiresAt])
+}
+
+model ClientSession {
+  id         String    @id @default(cuid())
+  // SHA-256 hex of the long-random session cookie value.
+  tokenHash  String    @unique
+  clientId   String
+  client     Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  lastUsedAt DateTime  @default(now())
+  createdAt  DateTime  @default(now())
+  userAgent  String?
+  revokedAt  DateTime?
+
+  @@index([clientId])
+  @@index([expiresAt])
 }

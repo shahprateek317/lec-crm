@@ -184,9 +184,9 @@ export default async function MyProfilePage() {
                               <Hourglass className="h-3 w-3" /> Pending verification
                             </span>
                           )}
-                          {c.storageKey === "pending-upload" && (
+                          {!c.documentId && (
                             <span className="rounded-full bg-muted px-1.5 py-0.5 text-muted-foreground">
-                              File upload coming soon
+                              No file attached yet
                             </span>
                           )}
                         </p>

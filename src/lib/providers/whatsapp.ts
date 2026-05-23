@@ -64,7 +64,7 @@ async function recordMessage(params: {
   providerMessageId: string | null;
   errorMessage?: string;
 }): Promise<WhatsAppMessage> {
-  return prisma.whatsAppMessage.create({
+  const created = await prisma.whatsAppMessage.create({
     data: {
       clientId: params.clientId,
       templateId: params.templateId,
@@ -75,6 +75,76 @@ async function recordMessage(params: {
       errorMessage: params.errorMessage,
       sentAt: params.status === "FAILED" ? null : new Date(),
     },
+  });
+  // Mirror the message into the coordinator inbox thread. Outbound
+  // resets unreadCount (the centre has spoken — ball is in client's
+  // court). Best-effort: a thread-upsert failure shouldn't block the
+  // primary write. Only mirror for matched clients; unknown phones
+  // remain as orphan WhatsAppMessage rows surfaced via /inbox's
+  // "Unknown sender" view (Phase 1b).
+  if (params.clientId && params.status !== "FAILED") {
+    await touchThread({
+      clientId: params.clientId,
+      direction: "OUTBOUND",
+      at: created.sentAt ?? new Date(),
+    }).catch((err) => console.error("[whatsapp] outbound thread upsert failed", err));
+  }
+  return created;
+}
+
+/**
+ * Upsert the per-client WhatsAppThread aggregate.
+ *
+ * Inbound:  bumps unreadCount + sets lastInboundAt + reopens RESOLVED threads.
+ * Outbound: zeroes unreadCount + sets lastOutboundAt (the centre replied).
+ *
+ * Exported so the webhook (`/api/webhook/whatsapp`) can call it on inbound
+ * messages with the same semantics.
+ */
+export async function touchThread(params: {
+  clientId: string;
+  direction: "INBOUND" | "OUTBOUND";
+  at: Date;
+}): Promise<void> {
+  const isInbound = params.direction === "INBOUND";
+
+  // Two writes: upsert the row, then conditionally adjust counters
+  // depending on direction. Wrapped in a transaction so unreadCount can't
+  // drift if two messages land concurrently.
+  await prisma.$transaction(async (tx) => {
+    const existing = await tx.whatsAppThread.findUnique({
+      where: { clientId: params.clientId },
+      select: { id: true, status: true },
+    });
+    if (!existing) {
+      await tx.whatsAppThread.create({
+        data: {
+          clientId: params.clientId,
+          status: "OPEN",
+          unreadCount: isInbound ? 1 : 0,
+          lastInboundAt:  isInbound ? params.at : null,
+          lastOutboundAt: isInbound ? null     : params.at,
+        },
+      });
+      return;
+    }
+    await tx.whatsAppThread.update({
+      where: { id: existing.id },
+      data: isInbound
+        ? {
+            unreadCount: { increment: 1 },
+            lastInboundAt: params.at,
+            // Reopen a RESOLVED thread on a new inbound — coordinator needs
+            // to know the conversation isn't dead.
+            status: existing.status === "RESOLVED" ? "OPEN" : existing.status,
+            // A new inbound also wakes a SNOOZED thread regardless of timer.
+            ...(existing.status === "SNOOZED" ? { status: "OPEN" as const, snoozeUntil: null } : {}),
+          }
+        : {
+            unreadCount: 0,
+            lastOutboundAt: params.at,
+          },
+    });
   });
 }
 
