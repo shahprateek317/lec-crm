@@ -48,7 +48,7 @@ export default async function SignInPage({
                   <input
                     type="hidden"
                     name="callbackUrl"
-                    value={sp.callbackUrl ?? "/dashboard"}
+                    value={sp.callbackUrl ?? "/"}
                   />
                   <SubmitButton
                     pendingLabel="Signing in…"

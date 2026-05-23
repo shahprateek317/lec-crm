@@ -27,6 +27,15 @@ const schema = z.object({
 
   TZ: z.string().default("Asia/Kolkata"),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+
+  // S3 uploads bucket (healer certs, client medical docs). On EC2 the
+  // app uses the instance profile — AWS_ACCESS_KEY_ID / _SECRET stay
+  // unset. For local dev (uploads disabled by default) you can opt in
+  // by setting these.
+  AWS_REGION: z.string().default("ap-south-1"),
+  S3_UPLOADS_BUCKET: z.string().default("lec-crm-uploads-397068653443"),
+  AWS_ACCESS_KEY_ID: z.string().optional(),
+  AWS_SECRET_ACCESS_KEY: z.string().optional(),
 });
 
 export const env = schema.parse(process.env);

@@ -21,6 +21,7 @@ export default defineConfig({
     environment: "node",
     globals: false,
     include: ["src/**/*.test.ts", "tests/**/*.test.ts"],
+    setupFiles: ["./tests/setup.ts"],
     // Each test file gets a fresh module graph so module-level singletons
     // (Prisma client mocks, env stubs) don't leak across files.
     isolate: true,

@@ -24,6 +24,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { ChevronLeft, UserCircle, ShieldCheck, FileText, Hourglass, Sparkles } from "lucide-react";
 import { format } from "date-fns";
 import { saveMyProfileAction, addCertificationAction, deleteCertificationAction } from "./actions";
+import { CertFileUploader } from "@/components/cert-file-uploader";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "My profile" };
@@ -174,7 +175,7 @@ export default async function MyProfilePage() {
                           {c.issuedAt ? ` · issued ${format(c.issuedAt, "MMM yyyy")}` : ""}
                           {c.expiresAt ? ` · expires ${format(c.expiresAt, "MMM yyyy")}` : ""}
                         </p>
-                        <p className="mt-1 inline-flex items-center gap-1 text-[11px]">
+                        <p className="mt-1 inline-flex flex-wrap items-center gap-1 text-[11px]">
                           {c.verifiedAt ? (
                             <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 font-medium text-emerald-900">
                               Verified by admin
@@ -184,10 +185,17 @@ export default async function MyProfilePage() {
                               <Hourglass className="h-3 w-3" /> Pending verification
                             </span>
                           )}
-                          {!c.documentId && (
-                            <span className="rounded-full bg-muted px-1.5 py-0.5 text-muted-foreground">
-                              No file attached yet
-                            </span>
+                          {c.documentId ? (
+                            <Link
+                              href={`/api/documents/${c.documentId}`}
+                              target="_blank"
+                              className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 font-medium text-emerald-900 hover:bg-emerald-200"
+                            >
+                              <FileText className="h-3 w-3" />
+                              View file
+                            </Link>
+                          ) : (
+                            <CertFileUploader certId={c.id} />
                           )}
                         </p>
                       </div>
@@ -237,9 +245,10 @@ export default async function MyProfilePage() {
                   </Labeled>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  Note: file upload is being wired in the next release. For
-                  now, please WhatsApp the certificate photo to the admin —
-                  they'll attach it once upload is live.
+                  Add the metadata first — once saved, an &ldquo;Attach file&rdquo; button
+                  appears so you can upload the PDF/photo (max 5 MB). Files are
+                  stored privately; only you, the centre admin, and the quality
+                  controller can view them.
                 </p>
                 <SubmitButton
                   pendingLabel="Adding…"

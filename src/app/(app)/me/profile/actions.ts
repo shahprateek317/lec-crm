@@ -110,12 +110,107 @@ export async function deleteCertificationAction(formData: FormData) {
 
   const cert = await prisma.healerCertificate.findUnique({
     where: { id: certId },
-    select: { userId: true },
+    select: { userId: true, documentId: true },
   });
   if (!cert || cert.userId !== session.user.id) {
     redirect("/me/profile?error=forbidden");
   }
   await prisma.healerCertificate.delete({ where: { id: certId } });
+  // Cascade the attached Document if any — soft-delete via deleteDocument
+  // which also removes the S3 object (versioning keeps a 365d recovery copy).
+  if (cert.documentId) {
+    const { deleteDocument } = await import("@/lib/uploads");
+    await deleteDocument(cert.documentId).catch((err) => console.error("[me/profile] doc delete failed", err));
+  }
   revalidatePath("/me/profile");
   redirect("/me/profile?ok=cert_deleted");
+}
+
+// ── File upload flow for a certification ─────────────────────────────
+// Three-step browser dance:
+//   1. requestCertUploadAction(certId, filename, contentType, sizeBytes)
+//        → server validates ownership + per-kind limits, creates a PENDING
+//          Document row, returns { uploadUrl, documentId }
+//   2. Browser PUT directly to S3 using `uploadUrl`
+//   3. completeCertUploadAction(certId, documentId)
+//        → server HEAD's the object, marks Document UPLOADED, attaches it
+//          to the certificate (HealerCertificate.documentId = documentId)
+//
+// The middle step bypasses the app server entirely — the browser uploads
+// directly to S3, keeping the EC2 instance's 2 GB RAM safe.
+
+const requestSchema = z.object({
+  certId:      z.string().min(1),
+  filename:    z.string().min(1).max(200),
+  contentType: z.string().min(1).max(120),
+  sizeBytes:   z.number().int().positive().max(50 * 1024 * 1024),
+});
+
+export async function requestCertUploadAction(input: {
+  certId: string;
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+}): Promise<{ ok: true; uploadUrl: string; documentId: string } | { ok: false; error: string }> {
+  const session = await requireSession();
+  const parsed = requestSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid input" };
+
+  const cert = await prisma.healerCertificate.findUnique({
+    where: { id: parsed.data.certId },
+    select: { id: true, userId: true, documentId: true },
+  });
+  if (!cert || cert.userId !== session.user.id) {
+    return { ok: false, error: "Certificate not found" };
+  }
+  if (cert.documentId) {
+    return { ok: false, error: "A file is already attached. Remove the certificate and re-add it to replace." };
+  }
+
+  const { issueUploadIntent } = await import("@/lib/uploads");
+  const res = await issueUploadIntent({
+    kind: "HEALER_CERT",
+    ownerType: "USER",
+    ownerId: session.user.id,
+    filename: parsed.data.filename,
+    contentType: parsed.data.contentType,
+    sizeBytes: parsed.data.sizeBytes,
+    uploadedById: session.user.id,
+  });
+  if (!res.ok) return { ok: false, error: res.error };
+  return { ok: true, uploadUrl: res.uploadUrl, documentId: res.documentId };
+}
+
+export async function completeCertUploadAction(input: {
+  certId: string;
+  documentId: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const session = await requireSession();
+
+  const [cert, doc] = await Promise.all([
+    prisma.healerCertificate.findUnique({
+      where: { id: input.certId },
+      select: { id: true, userId: true, documentId: true },
+    }),
+    prisma.document.findUnique({
+      where: { id: input.documentId },
+      select: { id: true, ownerUserId: true, kind: true, status: true },
+    }),
+  ]);
+  if (!cert || cert.userId !== session.user.id) return { ok: false, error: "Certificate not found" };
+  if (!doc || doc.ownerUserId !== session.user.id || doc.kind !== "HEALER_CERT") {
+    return { ok: false, error: "Document not found" };
+  }
+  if (cert.documentId) return { ok: false, error: "Already attached" };
+
+  const { markUploadComplete } = await import("@/lib/uploads");
+  const result = await markUploadComplete(input.documentId);
+  if (!result.ok) return { ok: false, error: result.error ?? "S3 verification failed" };
+
+  await prisma.healerCertificate.update({
+    where: { id: input.certId },
+    data: { documentId: input.documentId },
+  });
+  revalidatePath("/me/profile");
+  return { ok: true };
 }

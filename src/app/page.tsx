@@ -1,7 +1,18 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
+import { landingForRole } from "@/lib/role-landing";
 import { InstallAppPrompt } from "@/components/install-app-prompt";
 
-export default function HomePage() {
+// Authenticated visitors get role-aware redirected — coordinators to /inbox,
+// healers to /my-schedule, etc. Guests see the marketing splash + sign-in /
+// enquiry CTAs.
+export default async function HomePage() {
+  const session = await auth();
+  if (session?.user) {
+    redirect(landingForRole(session.user.role));
+  }
+
   return (
     <main className="pranic-glow min-h-screen">
       <div className="mx-auto flex min-h-screen max-w-4xl flex-col items-center justify-center px-6 py-16 text-center">
