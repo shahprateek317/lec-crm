@@ -11,6 +11,7 @@ export async function logHealingSessionAction(formData: FormData) {
   await requireSession();
   const clientId = String(formData.get("clientId") ?? "");
   const healerId = String(formData.get("healerId") ?? "");
+  const inProgressSessionId = String(formData.get("inProgressSessionId") ?? "") || undefined;
   const mode = String(formData.get("mode") ?? "IN_PERSON") as "IN_PERSON" | "DISTANT";
   const sessionType = String(formData.get("sessionType") ?? "PAID") as "DEMO" | "PAID" | "FOLLOW_UP";
   const colorsUsed = formData.getAll("colorsUsed").map(String);
@@ -34,6 +35,7 @@ export async function logHealingSessionAction(formData: FormData) {
     await logHealingSession({
       clientId,
       healerId,
+      inProgressSessionId,
       mode,
       sessionType,
       chakras: chakras as never,

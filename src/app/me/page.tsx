@@ -129,19 +129,16 @@ export default async function MeDashboardPage() {
             href="/me/sessions"
             icon={<Sparkles className="h-4 w-4 text-primary" />}
             label="Past sessions"
-            comingSoon
           />
           <RowLink
             href="/me/refer"
             icon={<Gift className="h-4 w-4 text-rose-700" />}
             label="Refer a friend"
-            comingSoon
           />
           <RowLink
             href="/me/messages"
             icon={<CalendarHeart className="h-4 w-4 text-emerald-700" />}
             label="Messages with the centre"
-            comingSoon
           />
         </CardContent>
       </Card>

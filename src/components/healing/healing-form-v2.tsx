@@ -26,20 +26,33 @@ export function HealingFormV2({
   healers,
   defaultHealerId,
   creditBalance,
+  inProgressSessionId,
+  initialState,
 }: {
   clientId: string;
   clientName: string;
   healers: ReadonlyArray<Healer>;
   defaultHealerId?: string;
   creditBalance: number;
+  /** When set, the form UPDATES the existing draft session created
+   *  by startSession() instead of creating a new row. */
+  inProgressSessionId?: string;
+  /** When updating an in-progress session, prefill the form fields with
+   *  whatever's already been captured. */
+  initialState?: {
+    mode?: "IN_PERSON" | "DISTANT";
+    sessionType?: "DEMO" | "PAID" | "FOLLOW_UP";
+    chakraStatesBefore?: ChakraStateMap;
+    chakraStatesAfter?: ChakraStateMap;
+  };
 }) {
   const [sessionType, setSessionType] = useState<"DEMO" | "PAID" | "FOLLOW_UP">(
-    creditBalance > 0 ? "PAID" : "DEMO",
+    initialState?.sessionType ?? (creditBalance > 0 ? "PAID" : "DEMO"),
   );
-  const [mode, setMode] = useState<"IN_PERSON" | "DISTANT">("IN_PERSON");
+  const [mode, setMode] = useState<"IN_PERSON" | "DISTANT">(initialState?.mode ?? "IN_PERSON");
   const [healerId, setHealerId] = useState<string>(defaultHealerId ?? "");
-  const [before, setBefore] = useState<ChakraStateMap>({});
-  const [after, setAfter] = useState<ChakraStateMap>({});
+  const [before, setBefore] = useState<ChakraStateMap>(initialState?.chakraStatesBefore ?? {});
+  const [after, setAfter] = useState<ChakraStateMap>(initialState?.chakraStatesAfter ?? {});
   const [colorsOn, setColorsOn] = useState<boolean>(false);
   const [pending, startTransition] = useTransition();
 
@@ -55,6 +68,9 @@ export function HealingFormV2({
       className="space-y-6 rounded-2xl border border-border bg-card p-5 shadow-sm md:p-6"
     >
       <input type="hidden" name="clientId" value={clientId} />
+      {inProgressSessionId && (
+        <input type="hidden" name="inProgressSessionId" value={inProgressSessionId} />
+      )}
       <input type="hidden" name="chakraStatesBefore" value={JSON.stringify(before)} />
       <input type="hidden" name="chakraStatesAfter" value={JSON.stringify(after)} />
 

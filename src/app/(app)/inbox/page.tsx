@@ -25,6 +25,7 @@ import { canUseInbox } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent } from "@/components/ui/card";
 import { OrphanAttachRow } from "@/components/orphan-attach-row";
+import { InboxKeyboardShortcuts } from "@/components/inbox-keyboard";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Inbox · LEC CRM" };
@@ -175,8 +176,15 @@ export default async function InboxPage({
     }));
   }
 
+  // Thread links list for the keyboard navigator. Built once per render
+  // so j/k traversal mirrors the visible order.
+  const threadLinks = tab === "unknown"
+    ? unknownGroups.map((g) => `/leads/new?phone=${encodeURIComponent(g.phone)}&fromInbox=1`)
+    : threads.map((t) => `/inbox/${t.clientId}`);
+
   return (
     <div className="space-y-6">
+      <InboxKeyboardShortcuts threadLinks={threadLinks} />
       <header>
         <h1 className="flex items-center gap-2 font-serif text-3xl font-medium tracking-tight">
           <InboxIcon className="h-7 w-7 text-primary" />

@@ -178,12 +178,29 @@ export const logHealingSchema = z.object({
   followUpNeeded: z.boolean().default(false),
   nextSessionRecommendedAt: z.coerce.date().optional(),
   creditUsed: z.boolean().default(true),
+  // When set, the healing session row was pre-created by startSession()
+  // (with startedAt + check-in token). We UPDATE that row rather than
+  // creating a new one, so the chakra form is logically the same session
+  // — not a duplicate. Credit deduction stays idempotent: we only
+  // create a CreditLedgerEntry if one doesn't already exist for this
+  // session id (handles re-saves / "I forgot to add a chakra reading").
+  inProgressSessionId: z.string().min(1).optional(),
 });
 
 /**
- * Record a healing session. If creditUsed, atomically deduct 1 credit from
- * the ledger. If balance would go negative, throws — caller should gate
- * the UI, but we guard the DB too.
+ * Record a healing session.
+ *
+ * Two modes:
+ *   1. Fresh (no inProgressSessionId)        — creates a HealingSession row.
+ *   2. Update (with inProgressSessionId)     — updates the row that
+ *      startSession() already created (it has startedAt + check-in token).
+ *      Used by the healer's "log details after the session" form.
+ *
+ * Credit deduction is idempotent in both modes: we only insert a
+ * CreditLedgerEntry if one doesn't already exist for this session id
+ * (so a re-save doesn't double-deduct).
+ *
+ * Throws if balance would go negative.
  */
 export async function logHealingSession(input: z.infer<typeof logHealingSchema>) {
   const parsed = logHealingSchema.parse(input);
@@ -194,53 +211,83 @@ export async function logHealingSession(input: z.infer<typeof logHealingSchema>)
     const after = parseChakraStates(parsed.chakraStatesAfter);
     const { total: improvementScore } = computeImprovement(before, after);
 
-    const session = await tx.healingSession.create({
-      data: {
-        clientId: parsed.clientId,
-        healerId: parsed.healerId,
-        mode: parsed.mode,
-        sessionType: parsed.sessionType,
-        chakras: parsed.chakras as Chakra[],
-        chakraStatesBefore: parsed.chakraStatesBefore as object,
-        chakraStatesAfter: parsed.chakraStatesAfter as object,
-        cleansingActions: parsed.cleansingActions,
-        energisingActions: parsed.energisingActions,
-        improvementScore,
-        colorsUsed: parsed.colorsUsed as Array<"WHITE" | "GREEN" | "ORANGE" | "YELLOW" | "BLUE" | "VIOLET" | "RED" | "ELECTRIC_VIOLET" | "GOLD">,
-        process: parsed.process,
-        durationMinutes: parsed.durationMinutes,
-        remarks: parsed.remarks,
-        clientResponse: parsed.clientResponse,
-        followUpNeeded: parsed.followUpNeeded,
-        nextSessionRecommendedAt: parsed.nextSessionRecommendedAt,
-        creditUsed: parsed.creditUsed,
-      },
-    });
+    const sessionData = {
+      mode: parsed.mode,
+      sessionType: parsed.sessionType,
+      chakras: parsed.chakras as Chakra[],
+      chakraStatesBefore: parsed.chakraStatesBefore as object,
+      chakraStatesAfter: parsed.chakraStatesAfter as object,
+      cleansingActions: parsed.cleansingActions,
+      energisingActions: parsed.energisingActions,
+      improvementScore,
+      colorsUsed: parsed.colorsUsed as Array<"WHITE" | "GREEN" | "ORANGE" | "YELLOW" | "BLUE" | "VIOLET" | "RED" | "ELECTRIC_VIOLET" | "GOLD">,
+      process: parsed.process,
+      durationMinutes: parsed.durationMinutes,
+      remarks: parsed.remarks,
+      clientResponse: parsed.clientResponse,
+      followUpNeeded: parsed.followUpNeeded,
+      nextSessionRecommendedAt: parsed.nextSessionRecommendedAt,
+      creditUsed: parsed.creditUsed,
+    };
 
-    if (parsed.creditUsed) {
-      const prior = await tx.creditLedgerEntry.aggregate({
-        where: { clientId: parsed.clientId },
-        _sum: { delta: true },
+    let session;
+    if (parsed.inProgressSessionId) {
+      // Update path — verify the row exists AND belongs to the supplied
+      // client/healer (defense against a tampered hidden input).
+      const existing = await tx.healingSession.findUnique({
+        where: { id: parsed.inProgressSessionId },
+        select: { id: true, clientId: true, healerId: true },
       });
-      const currentBalance = prior._sum.delta ?? 0;
-      if (currentBalance <= 0) {
-        throw new Error("No credits available. Record a payment first or mark as complimentary.");
+      if (!existing) throw new Error("In-progress session not found.");
+      if (existing.clientId !== parsed.clientId || existing.healerId !== parsed.healerId) {
+        throw new Error("In-progress session does not match this client/healer.");
       }
-      await tx.creditLedgerEntry.create({
+      session = await tx.healingSession.update({
+        where: { id: parsed.inProgressSessionId },
+        data: sessionData,
+      });
+    } else {
+      session = await tx.healingSession.create({
         data: {
           clientId: parsed.clientId,
-          delta: -1,
-          balanceAfter: currentBalance - 1,
-          reason: "Healing session",
-          healingSessionId: session.id,
+          healerId: parsed.healerId,
+          ...sessionData,
         },
       });
+    }
 
-      // Move client to HEALING_ACTIVE if not already there.
-      await tx.client.update({
-        where: { id: parsed.clientId, stage: { in: ["VISIT_DONE", "HEALING_ACTIVE"] } },
-        data: { stage: "HEALING_ACTIVE" },
-      }).catch(() => void 0);
+    if (parsed.creditUsed) {
+      // Idempotent: skip the deduction if a ledger entry for this session
+      // already exists (re-save during update flow).
+      const already = await tx.creditLedgerEntry.findFirst({
+        where: { healingSessionId: session.id, delta: -1 },
+        select: { id: true },
+      });
+      if (!already) {
+        const prior = await tx.creditLedgerEntry.aggregate({
+          where: { clientId: parsed.clientId },
+          _sum: { delta: true },
+        });
+        const currentBalance = prior._sum.delta ?? 0;
+        if (currentBalance <= 0) {
+          throw new Error("No credits available. Record a payment first or mark as complimentary.");
+        }
+        await tx.creditLedgerEntry.create({
+          data: {
+            clientId: parsed.clientId,
+            delta: -1,
+            balanceAfter: currentBalance - 1,
+            reason: "Healing session",
+            healingSessionId: session.id,
+          },
+        });
+
+        // Move client to HEALING_ACTIVE if not already there.
+        await tx.client.update({
+          where: { id: parsed.clientId, stage: { in: ["VISIT_DONE", "HEALING_ACTIVE"] } },
+          data: { stage: "HEALING_ACTIVE" },
+        }).catch(() => void 0);
+      }
     }
 
     return session;
