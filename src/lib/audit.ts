@@ -14,13 +14,28 @@
 
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
-import type { AuditAction } from "@prisma/client";
+import type { AuditAction, Prisma } from "@prisma/client";
 
+export type AuditMeta = Prisma.InputJsonValue;
+
+/**
+ * Append a row to the audit log.
+ *
+ * Failure modes:
+ *  - If the audit-log write itself fails, we console.error and swallow —
+ *    audit writes must never break the primary user flow.
+ *  - If the actor can't be resolved (no session, no opts.actorId), we
+ *    emit a `console.warn` and skip the write. Phase 2 will surface this
+ *    as a Prometheus counter / Slack alert so unattributable reads are
+ *    visible to ops. We deliberately do NOT silently swallow that case
+ *    because access without a tracked actor is the exact insider-risk
+ *    we're guarding against.
+ */
 export async function audit(
   action: AuditAction,
   targetType: string,
   targetId: string,
-  opts: { actorId?: string; meta?: Record<string, unknown> } = {},
+  opts: { actorId?: string; meta?: AuditMeta } = {},
 ): Promise<void> {
   try {
     let actorId = opts.actorId;
@@ -37,10 +52,17 @@ export async function audit(
     if (!actorId) {
       // Lazy import to avoid pulling next-auth into Edge bundles via this file.
       const { auth } = await import("@/lib/auth");
-      const session = await auth().catch(() => null);
-      actorId = session?.user?.id;
+      try {
+        const session = await auth();
+        actorId = session?.user?.id;
+      } catch (err) {
+        console.warn("[audit] session resolution failed", { action, targetType, targetId }, err);
+      }
     }
-    if (!actorId) return; // No actor → not auditable. Background jobs pass actorId explicitly.
+    if (!actorId) {
+      console.warn("[audit] skipping write — no actor resolved", { action, targetType, targetId });
+      return;
+    }
 
     await prisma.auditLog.create({
       data: {
@@ -49,7 +71,7 @@ export async function audit(
         targetType,
         targetId,
         ip: ip ?? null,
-        meta: opts.meta as never,
+        meta: opts.meta,
       },
     });
   } catch (err) {

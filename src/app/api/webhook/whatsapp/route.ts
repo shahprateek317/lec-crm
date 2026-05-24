@@ -104,8 +104,11 @@ export async function POST(req: Request) {
         const client = await prisma.client.findUnique({ where: { phone } });
         const body = msg.text?.body ?? `[${msg.type}]`;
         const sentAt = new Date(Number(msg.timestamp) * 1000);
-        await prisma.whatsAppMessage.create({
-          data: {
+        // Idempotent: Meta retries the entire webhook payload if we
+        // don't 2xx within ~20s. providerMessageId is the natural key.
+        await prisma.whatsAppMessage.upsert({
+          where: { providerMessageId: msg.id },
+          create: {
             clientId: client?.id,
             phone,
             direction: "INBOUND",
@@ -114,6 +117,7 @@ export async function POST(req: Request) {
             providerMessageId: msg.id,
             sentAt,
           },
+          update: {}, // no-op on retry; the original write is canonical
         });
         // Bump the thread aggregate for matched clients. Unknown senders
         // are handled by /inbox's orphan view (Phase 1b) — no thread row.

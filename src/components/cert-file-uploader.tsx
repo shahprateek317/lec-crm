@@ -9,13 +9,15 @@
 // All progress and error states stay in the client; the server side is
 // stateless once it's issued the presigned URL.
 
-import { useState, useTransition } from "react";
-import { Loader2, Upload, Check, AlertCircle } from "lucide-react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { Loader2, Upload, Check, AlertCircle, RotateCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { requestCertUploadAction, completeCertUploadAction } from "@/app/(app)/me/profile/actions";
+import { DOCUMENT_LIMITS } from "@/lib/uploads.constants";
 
-const ACCEPTED_TYPES = "application/pdf,image/png,image/jpeg";
-const MAX_BYTES = 5 * 1024 * 1024;
+const KIND = "HEALER_CERT" as const;
+const LIMIT = DOCUMENT_LIMITS[KIND];
+const ACCEPTED_TYPES = [...LIMIT.allowedContentTypes].join(",");
 
 type State =
   | { kind: "idle" }
@@ -28,19 +30,34 @@ export function CertFileUploader({ certId }: { certId: string }) {
   const router = useRouter();
   const [state, setState] = useState<State>({ kind: "idle" });
   const [, startTransition] = useTransition();
+  const xhrRef = useRef<XMLHttpRequest | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      // Abort any in-flight upload if the user navigates away.
+      xhrRef.current?.abort();
+    };
+  }, []);
+
+  function safeSet(s: State) {
+    if (mountedRef.current) setState(s);
+  }
 
   async function handleFile(file: File) {
     if (!file) return;
-    if (file.size > MAX_BYTES) {
-      setState({ kind: "error", message: "File is larger than 5 MB." });
+    if (file.size > LIMIT.maxBytes) {
+      safeSet({ kind: "error", message: `File is larger than ${Math.floor(LIMIT.maxBytes / 1024 / 1024)} MB.` });
       return;
     }
-    if (!ACCEPTED_TYPES.includes(file.type)) {
-      setState({ kind: "error", message: "Only PDF, PNG, or JPEG are accepted." });
+    if (!LIMIT.allowedContentTypes.includes(file.type)) {
+      safeSet({ kind: "error", message: "Unsupported file type. Use PDF, PNG, or JPEG." });
       return;
     }
 
-    setState({ kind: "uploading", progress: 0 });
+    safeSet({ kind: "uploading", progress: 0 });
 
     // 1. Ask for a presigned URL
     const intent = await requestCertUploadAction({
@@ -50,20 +67,22 @@ export function CertFileUploader({ certId }: { certId: string }) {
       sizeBytes: file.size,
     });
     if (!intent.ok) {
-      setState({ kind: "error", message: intent.error });
+      safeSet({ kind: "error", message: intent.error });
       return;
     }
 
     // 2. PUT directly to S3. XMLHttpRequest used (not fetch) so we get
-    //    upload progress events for the spinner.
+    //    upload progress events for the spinner. XHR is stored in a ref
+    //    so an unmount can abort it.
     try {
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
+        xhrRef.current = xhr;
         xhr.open("PUT", intent.uploadUrl);
         xhr.setRequestHeader("Content-Type", file.type);
         xhr.upload.onprogress = (e) => {
           if (e.lengthComputable) {
-            setState({ kind: "uploading", progress: e.loaded / e.total });
+            safeSet({ kind: "uploading", progress: e.loaded / e.total });
           }
         };
         xhr.onload = () => {
@@ -71,24 +90,45 @@ export function CertFileUploader({ certId }: { certId: string }) {
           else reject(new Error(`S3 PUT failed (${xhr.status})`));
         };
         xhr.onerror = () => reject(new Error("Network error during upload"));
+        xhr.onabort = () => reject(new Error("Upload cancelled"));
         xhr.send(file);
       });
     } catch (err) {
-      setState({ kind: "error", message: err instanceof Error ? err.message : "Upload failed" });
+      xhrRef.current = null;
+      safeSet({ kind: "error", message: err instanceof Error ? err.message : "Upload failed" });
       return;
     }
+    xhrRef.current = null;
 
     // 3. Confirm with the server
-    setState({ kind: "verifying" });
+    safeSet({ kind: "verifying" });
     const confirm = await completeCertUploadAction({ certId, documentId: intent.documentId });
     if (!confirm.ok) {
-      setState({ kind: "error", message: confirm.error });
+      safeSet({ kind: "error", message: confirm.error });
       return;
     }
 
-    setState({ kind: "done" });
-    // Refresh the server component so the new attachment renders.
+    safeSet({ kind: "done" });
     startTransition(() => router.refresh());
+  }
+
+  // Show a retry button only in the error state so the user doesn't have
+  // to refresh the whole page after a transient network blip.
+  if (state.kind === "error") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive/10 px-2.5 py-1 text-[11px] font-medium text-destructive">
+        <AlertCircle className="h-3 w-3" />
+        {state.message}
+        <button
+          type="button"
+          onClick={() => setState({ kind: "idle" })}
+          className="ml-1 inline-flex items-center gap-1 rounded-full bg-destructive/20 px-1.5 py-0.5 text-[10px] font-medium hover:bg-destructive/30"
+        >
+          <RotateCw className="h-2.5 w-2.5" />
+          Retry
+        </button>
+      </span>
+    );
   }
 
   return (
@@ -116,12 +156,6 @@ export function CertFileUploader({ certId }: { certId: string }) {
           <Check className="h-3 w-3" />
           Attached
         </>
-      )}
-      {state.kind === "error" && (
-        <span className="inline-flex items-center gap-1 text-destructive">
-          <AlertCircle className="h-3 w-3" />
-          {state.message}
-        </span>
       )}
       <input
         type="file"

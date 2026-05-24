@@ -11,8 +11,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getDownloadUrl } from "@/lib/uploads";
-
-const ELEVATED_ROLES = new Set(["ADMIN", "SUPER_ADMIN", "QUALITY_CONTROLLER"]);
+import { canViewDocument } from "@/lib/document-authz";
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -30,12 +29,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     return NextResponse.json({ error: "upload_incomplete" }, { status: 409 });
   }
 
-  const isOwner = doc.ownerUserId && doc.ownerUserId === session.user.id;
-  const isElevated = ELEVATED_ROLES.has(session.user.role);
-  // Client portal viewers don't reach this route in Phase 1a (they sign
-  // in via a separate cookie); they'll get their own /me/api/documents
-  // endpoint in Phase 1b that checks the client session.
-  if (!isOwner && !isElevated) {
+  if (!canViewDocument(doc, { userId: session.user.id, role: session.user.role })) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

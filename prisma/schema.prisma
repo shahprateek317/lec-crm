@@ -856,7 +856,7 @@ model WhatsAppMessage {
   direction         WhatsAppDirection @default(OUTBOUND)
   body              String
   status            WhatsAppStatus    @default(QUEUED)
-  providerMessageId String?
+  providerMessageId String?           @unique
   errorMessage      String?
   scheduledFor      DateTime?
   sentAt            DateTime?
@@ -1143,6 +1143,7 @@ model Notification {
 enum AuditAction {
   DOCUMENT_VIEWED
   DOCUMENT_DOWNLOADED
+  DOCUMENT_DELETED
   CLIENT_DATA_EXPORTED
   CLIENT_SOFT_DELETED
   CLIENT_HARD_DELETED

@@ -95,8 +95,13 @@ async function recordMessage(params: {
 /**
  * Upsert the per-client WhatsAppThread aggregate.
  *
- * Inbound:  bumps unreadCount + sets lastInboundAt + reopens RESOLVED threads.
+ * Inbound:  bumps unreadCount + sets lastInboundAt + reopens RESOLVED/SNOOZED.
  * Outbound: zeroes unreadCount + sets lastOutboundAt (the centre replied).
+ *
+ * Race-safe via Prisma `upsert` on the `clientId` unique constraint —
+ * two concurrent inbound messages for a brand-new client cannot both
+ * win a create. Status transitions are computed once into a single
+ * value (no spread-key fragility).
  *
  * Exported so the webhook (`/api/webhook/whatsapp`) can call it on inbound
  * messages with the same semantics.
@@ -108,43 +113,45 @@ export async function touchThread(params: {
 }): Promise<void> {
   const isInbound = params.direction === "INBOUND";
 
-  // Two writes: upsert the row, then conditionally adjust counters
-  // depending on direction. Wrapped in a transaction so unreadCount can't
-  // drift if two messages land concurrently.
-  await prisma.$transaction(async (tx) => {
-    const existing = await tx.whatsAppThread.findUnique({
+  // Status transition is computed explicitly to avoid the
+  // object-spread key-ordering fragility flagged in mid-phase review.
+  // For inbound: if the existing thread is RESOLVED or SNOOZED, reopen.
+  // For outbound: leave status alone (writing back the same value is fine).
+  //
+  // upsert.update accepts a function-less object — we need the existing
+  // status to decide whether to reset SNOOZED. Two-step: fetch (best-effort
+  // for status), then upsert with computed status. The upsert is atomic on
+  // clientId — the worst case under contention is a stale status read
+  // (still safe; we still reopen on any incoming inbound).
+  let existingStatus: "OPEN" | "SNOOZED" | "RESOLVED" | undefined;
+  if (isInbound) {
+    const existing = await prisma.whatsAppThread.findUnique({
       where: { clientId: params.clientId },
-      select: { id: true, status: true },
+      select: { status: true },
     });
-    if (!existing) {
-      await tx.whatsAppThread.create({
-        data: {
-          clientId: params.clientId,
-          status: "OPEN",
-          unreadCount: isInbound ? 1 : 0,
-          lastInboundAt:  isInbound ? params.at : null,
-          lastOutboundAt: isInbound ? null     : params.at,
+    existingStatus = existing?.status;
+  }
+  const inboundShouldReopen = existingStatus === "RESOLVED" || existingStatus === "SNOOZED";
+
+  await prisma.whatsAppThread.upsert({
+    where: { clientId: params.clientId },
+    create: {
+      clientId: params.clientId,
+      status: "OPEN",
+      unreadCount: isInbound ? 1 : 0,
+      lastInboundAt:  isInbound ? params.at : null,
+      lastOutboundAt: isInbound ? null     : params.at,
+    },
+    update: isInbound
+      ? {
+          unreadCount: { increment: 1 },
+          lastInboundAt: params.at,
+          ...(inboundShouldReopen ? { status: "OPEN" as const, snoozeUntil: null } : {}),
+        }
+      : {
+          unreadCount: 0,
+          lastOutboundAt: params.at,
         },
-      });
-      return;
-    }
-    await tx.whatsAppThread.update({
-      where: { id: existing.id },
-      data: isInbound
-        ? {
-            unreadCount: { increment: 1 },
-            lastInboundAt: params.at,
-            // Reopen a RESOLVED thread on a new inbound — coordinator needs
-            // to know the conversation isn't dead.
-            status: existing.status === "RESOLVED" ? "OPEN" : existing.status,
-            // A new inbound also wakes a SNOOZED thread regardless of timer.
-            ...(existing.status === "SNOOZED" ? { status: "OPEN" as const, snoozeUntil: null } : {}),
-          }
-        : {
-            unreadCount: 0,
-            lastOutboundAt: params.at,
-          },
-    });
   });
 }
 

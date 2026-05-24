@@ -116,11 +116,15 @@ export async function deleteCertificationAction(formData: FormData) {
     redirect("/me/profile?error=forbidden");
   }
   await prisma.healerCertificate.delete({ where: { id: certId } });
-  // Cascade the attached Document if any — soft-delete via deleteDocument
-  // which also removes the S3 object (versioning keeps a 365d recovery copy).
+  // Cascade the attached Document if any — hard-deletes the row + S3
+  // object (versioning preserves a 365d recovery copy via the AWS
+  // console). Audit log captures the destructive action.
   if (cert.documentId) {
     const { deleteDocument } = await import("@/lib/uploads");
-    await deleteDocument(cert.documentId).catch((err) => console.error("[me/profile] doc delete failed", err));
+    await deleteDocument(cert.documentId, {
+      actorId: session.user.id,
+      reason: "Cascaded from HealerCertificate.delete",
+    }).catch((err) => console.error("[me/profile] doc delete failed", err));
   }
   revalidatePath("/me/profile");
   redirect("/me/profile?ok=cert_deleted");

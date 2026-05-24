@@ -23,45 +23,26 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
 import { audit } from "@/lib/audit";
+// cuid2-style id generation matching Prisma's @default(cuid()). Used to
+// pre-compute the Document id so we can compose the final S3 storage key
+// before the row is created — avoids the @unique placeholder race.
+import { createId as cuid } from "@paralleldrive/cuid2";
 
 // ── Per-kind policy ───────────────────────────────────────────────────
+// Limits live in a client-safe module so the React uploader can import
+// them without pulling in AWS SDK / Prisma. The shape here builds a
+// Set for fast contains-checks; the shared module exposes a readonly[]
+// suitable for `<input accept>`.
+import { DOCUMENT_LIMITS as SHARED_LIMITS } from "@/lib/uploads.constants";
+
 export const DOCUMENT_LIMITS: Record<DocumentKind, {
   maxBytes: number;
   allowedContentTypes: ReadonlySet<string>;
 }> = {
-  HEALER_CERT: {
-    maxBytes: 5 * 1024 * 1024, // 5 MB
-    allowedContentTypes: new Set([
-      "application/pdf",
-      "image/png",
-      "image/jpeg",
-    ]),
-  },
-  MEDICAL_REPORT: {
-    maxBytes: 10 * 1024 * 1024, // 10 MB
-    allowedContentTypes: new Set([
-      "application/pdf",
-      "image/png",
-      "image/jpeg",
-    ]),
-  },
-  PROFILE_PHOTO: {
-    maxBytes: 2 * 1024 * 1024, // 2 MB
-    allowedContentTypes: new Set([
-      "image/png",
-      "image/jpeg",
-      "image/webp",
-    ]),
-  },
-  OTHER: {
-    maxBytes: 10 * 1024 * 1024,
-    allowedContentTypes: new Set([
-      "application/pdf",
-      "image/png",
-      "image/jpeg",
-      "text/plain",
-    ]),
-  },
+  HEALER_CERT:    { maxBytes: SHARED_LIMITS.HEALER_CERT.maxBytes,    allowedContentTypes: new Set(SHARED_LIMITS.HEALER_CERT.allowedContentTypes) },
+  MEDICAL_REPORT: { maxBytes: SHARED_LIMITS.MEDICAL_REPORT.maxBytes, allowedContentTypes: new Set(SHARED_LIMITS.MEDICAL_REPORT.allowedContentTypes) },
+  PROFILE_PHOTO:  { maxBytes: SHARED_LIMITS.PROFILE_PHOTO.maxBytes,  allowedContentTypes: new Set(SHARED_LIMITS.PROFILE_PHOTO.allowedContentTypes) },
+  OTHER:          { maxBytes: SHARED_LIMITS.OTHER.maxBytes,          allowedContentTypes: new Set(SHARED_LIMITS.OTHER.allowedContentTypes) },
 };
 
 // ── Validation ────────────────────────────────────────────────────────
@@ -199,31 +180,32 @@ export async function issueUploadIntent(input: IssueUploadIntentInput): Promise<
   });
   if (!v.ok) return { ok: false, error: v.error };
 
+  // Pre-compute the Document id so the storageKey is unique-by-construction
+  // before the row is created. Previously we wrote a "_placeholder_" key
+  // then patched it — that races on `storageKey @unique` when two uploads
+  // happen concurrently.
+  const documentId = cuid();
+  const storageKey = documentStorageKey({
+    kind: input.kind,
+    ownerType: input.ownerType,
+    ownerId: input.ownerId,
+    documentId,
+    filename: input.filename,
+  });
+
   const doc = await prisma.document.create({
     data: {
+      id: documentId,
       kind: input.kind,
       ownerUserId:   input.ownerType === "USER"   ? input.ownerId : null,
       ownerClientId: input.ownerType === "CLIENT" ? input.ownerId : null,
-      storageKey: "_placeholder_", // overwritten below; @unique forces uniqueness
+      storageKey,
       filename: input.filename,
       contentType: input.contentType,
       sizeBytes: input.sizeBytes,
       status: "PENDING",
       uploadedById: input.uploadedById ?? null,
     },
-  });
-
-  // Generate the final key now that we have the doc id and patch the row.
-  const storageKey = documentStorageKey({
-    kind: input.kind,
-    ownerType: input.ownerType,
-    ownerId: input.ownerId,
-    documentId: doc.id,
-    filename: input.filename,
-  });
-  await prisma.document.update({
-    where: { id: doc.id },
-    data: { storageKey },
   });
 
   const cmd = new PutObjectCommand({
@@ -253,13 +235,41 @@ export async function markUploadComplete(documentId: string): Promise<{ ok: bool
       Bucket: env.S3_UPLOADS_BUCKET,
       Key: doc.storageKey,
     }));
+
+    // Defense-in-depth: even though the presigned URL pins the
+    // Content-Type at issue time, verify what S3 actually accepted. Also
+    // re-run the per-kind policy against the real size — protects against
+    // a client lying about size at intent time and uploading something
+    // larger up to the soft S3 limit.
+    const realContentType = head.ContentType ?? doc.contentType;
+    const realSize = typeof head.ContentLength === "number" ? head.ContentLength : doc.sizeBytes ?? 0;
+    const recheck = validateUploadInputs({
+      kind: doc.kind,
+      filename: doc.filename,
+      contentType: realContentType,
+      sizeBytes: realSize,
+    });
+    if (!recheck.ok) {
+      // The uploaded object violates our policy — delete it and fail the
+      // attachment so a downstream caller can present an error.
+      await s3().send(new DeleteObjectCommand({
+        Bucket: env.S3_UPLOADS_BUCKET,
+        Key: doc.storageKey,
+      })).catch((e) => console.error("[uploads] cleanup after rejected upload failed", e));
+      await prisma.document.update({
+        where: { id: documentId },
+        data: { status: "FAILED" },
+      });
+      return { ok: false, error: recheck.error };
+    }
+
     await prisma.document.update({
       where: { id: documentId },
       data: {
         status: "UPLOADED",
         uploadedAt: new Date(),
-        // Trust the actual S3 size in case the client lied about it.
-        sizeBytes: typeof head.ContentLength === "number" ? head.ContentLength : doc.sizeBytes,
+        sizeBytes: realSize,
+        contentType: realContentType,
       },
     });
     return { ok: true };
@@ -297,11 +307,19 @@ export async function getDownloadUrl(documentId: string, opts: { actorId: string
 }
 
 /**
- * Soft-delete a Document — removes the S3 object and the row.
- * Versioning is enabled on the bucket so this is recoverable from
- * non-current versions for 365 days.
+ * Hard-delete a Document — removes the Document row and the current S3
+ * object. Bucket versioning preserves a 365-day recovery copy of the
+ * object's bytes, so this is recoverable from the AWS console for that
+ * window. The Document row itself is not recoverable.
+ *
+ * Writes a DOCUMENT_DELETED audit entry — required for DPDP defensibility
+ * since this is a destructive operation on potentially sensitive data
+ * (medical reports, certifications).
  */
-export async function deleteDocument(documentId: string): Promise<void> {
+export async function deleteDocument(
+  documentId: string,
+  opts: { actorId?: string; reason?: string } = {},
+): Promise<void> {
   const doc = await prisma.document.findUnique({ where: { id: documentId } });
   if (!doc) return;
   await s3().send(new DeleteObjectCommand({
@@ -309,4 +327,14 @@ export async function deleteDocument(documentId: string): Promise<void> {
     Key: doc.storageKey,
   })).catch((err) => console.error("[uploads] S3 delete failed", err));
   await prisma.document.delete({ where: { id: documentId } });
+  if (opts.actorId) {
+    await audit("DOCUMENT_DELETED", "Document", documentId, {
+      actorId: opts.actorId,
+      meta: {
+        filename: doc.filename,
+        kind: doc.kind,
+        reason: opts.reason ?? null,
+      },
+    });
+  }
 }
