@@ -363,13 +363,95 @@ in-progress page exposes a "test link" affordance for the operator.
 
 ---
 
-## 14. Known limitations & follow-ups
+## 14. Phase 1 wrap-up (May 2026) — what shipped
+
+The doc design at `docs/UX_ARCHITECTURE.md` was reviewed by an
+independent architecture-reviewer agent before any code, then split
+into 1a/1b/1c sub-phases. All shipped on `main` and live on prod.
+
+**Phase 1a — security + foundation:**
+- WhatsApp webhook now verifies the `X-Hub-Signature-256` HMAC header
+  (12 vitest cases on `src/lib/webhook-signing.ts`). The webhook
+  fails closed when `WHATSAPP_APP_SECRET` is missing — admins paste
+  it at `/settings/whatsapp` (encrypted at rest with AUTH_SECRET).
+- New Prisma models: `Document` (polymorphic FK + CHECK constraint),
+  `WhatsAppThread`, `QualityNote`, `Notification`, `AuditLog`,
+  `ClientMagicLink`, `ClientSession` (both hash tokens). Single
+  migration; back-relations resolve atomically.
+- S3 uploads bucket `lec-crm-uploads-397068653443` with versioning,
+  encryption, public-access-blocked, CORS for browser PUT, 365d→Glacier
+  IR lifecycle. IAM extended on the EC2 instance role.
+- `src/lib/uploads.ts` — presigned PUT/GET helpers, server-side
+  validation, race-safe Document creation (cuid pre-computed), content-
+  type re-verification at HeadObject time. 14 vitest cases on the
+  pure validation/keygen layer + 10 cases on authz predicate.
+- Healer cert file upload UI on `/me/profile`: 3-step browser dance
+  (request → PUT → confirm) via `<CertFileUploader>`. XHR upload with
+  progress; abort on unmount; retry on error.
+- Role-aware landing — `landingForRole()` routes coordinators to
+  `/inbox`, healers to `/my-schedule`, QC to `/quality`, admin to
+  `/dashboard`. Public homepage redirects signed-in users.
+
+**Phase 1b — clients online + coordinator inbox + QC drill-down:**
+- Passwordless client portal at `/me`: hybrid OTP + magic-link
+  delivered in one `client_magic_link` WhatsApp template. SHA-256-
+  hashed tokens. Sliding-renewal 30-day session in a separate
+  `lec_me_session` cookie. `requireClient()` gates `/me` routes via
+  a dedicated cookie path (NextAuth handles staff at `/sign-in`).
+- 28 vitest cases on the auth library covering: token shape, race-
+  safe consume, OTP lockout after 5 wrong tries, sliding renewal,
+  revoke-single + revoke-all.
+- `/me/sign-in` two-phase (phone → OTP) with opaque responses (no
+  enumeration). `/me/auth/[token]` consumes the magic link.
+- `/me` dashboard with next-session, credit balance, referrals teaser,
+  sign-out / sign-out-all / delete-account (DPDP soft-delete).
+- Coordinator `/inbox` MVP — tabbed thread list (Open / Mine / Waiting /
+  Snoozed / Escalated / Resolved / Unknown), per-client detail with
+  assign / snooze (5 presets) / escalate / resolve, reply panel
+  (free-text inside 24h customer-care window, templates always),
+  unknown-sender attach affordance. Audit-log entry on every thread
+  view (`WHATSAPP_THREAD_OPENED`).
+- `/quality/sessions/[id]` per-session audit drill-down — improvement
+  score / duration / confirmation-skew at-a-glance, chakra readings,
+  client feedback, prior notes timeline, append-only new-note form
+  (5-point smiley scale + escalate flag).
+- `/quality/healers/[id]` scorecard — 30d sessions / avg improvement /
+  missed-confirmation rate; certs panel with Verify / Unverify
+  (writes `CERT_VERIFIED` audit entry).
+
+**Phase 1c — connect the surfaces:**
+- Healing form unification: `/leads/[id]/healing/new?inProgressSessionId=…`
+  now UPDATES the existing session row created by `startSession()`
+  instead of inserting a duplicate. Credit-ledger writes are
+  idempotent (no double-deduct on re-save).
+- `/me/sessions` — read-only timeline with improvement score + confirmation.
+- `/me/refer` — share-friendly referral page with WhatsApp deep-link +
+  copy-to-clipboard. Referee enquiry form attributes via `?ref=<clientId>`.
+- `/me/messages` — chat-style read-only WhatsApp transcript.
+- Inbox keyboard shortcuts (`j/k`, `Enter`/`l`, `g i`, `?`) as a
+  power-user reward; visible buttons remain the primary affordance.
+
+Mid-phase code-review agent caught and fixed before deploy:
+B1 (placeholder storageKey race → cuid pre-compute), B3 (deleteDocument
+unaudited → DOCUMENT_DELETED enum + audit), B5 (webhook idempotency →
+upsert on providerMessageId), C1 (markUploadComplete now re-verifies
+ContentType), C2 (touchThread race → upsert on clientId).
+
+Test inventory: 65 passing across 5 vitest suites covering security-
+critical paths (HMAC, hashed token consumption, OTP lockout, presigned
+URL signing, authz predicates). UI / integration tests deliberately
+deferred to Phase 2 (Playwright once the surfaces stabilise).
+
+---
+
+## 15. Known limitations & follow-ups (post-Phase 1)
 
 - **No CI/CD** — deploys are manual rsync + rebuild. Acceptable for one-server, single-developer ops.
 - **Single AZ** — no automatic failover. If `ap-south-1a` has issues, we're down. Adding a multi-AZ RDS + auto-scaling would 3-4× the bill and is overkill for this scale.
 - **Image not tagged by SHA** — rollback requires identifying old image SHA manually. Easy improvement when desired.
 - **No staging environment** — changes deploy direct to prod. Fine while we have low traffic; add staging when traffic justifies.
 - **WhatsApp permanent token via System Users** — see /settings/whatsapp; deferred until Meta's display name approval clears.
-- **Healer certificate file uploads** — schema is in place (`HealerCertificate.storageKey`); titles + dates can be entered today; the actual file upload UI ships in the next iteration once we wire S3 presigned URLs + an `lec-crm-uploads-…` bucket with appropriate IAM.
-- **Existing healing log form (/leads/[id]/healing/new)** doesn't yet pre-fill from an in-progress session ID. Healer-side flow currently creates a duplicate row on save; needs the form refactored to update by `inProgressSessionId` query param.
-- **Vercel deployment is still live** at `lec-crm.vercel.app`. Once this server is verified working, point dad's testing there and eventually decommission the Vercel deployment.
+- **Hard-delete reconciler not yet running** — `Client.deletedAt` is set by /me/profile's delete-account action but the nightly cron that hard-deletes after 30 days isn't wired. Add to Phase 2.
+- **Two-way `/me/messages`** — Phase 2; today it's read-only.
+- **Audit log viewer at /settings/audit-log** — entries are being written but the admin viewer ships in Phase 2.
+- **Vercel deployment is still live** at `lec-crm.vercel.app`. Once dad's testing on `crm.lifeenergycentre.in` is settled, decommission Vercel.
