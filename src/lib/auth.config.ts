@@ -37,13 +37,25 @@ export const authConfig = {
       if (publicPaths.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
         return true;
       }
+      // Prefix-match helper: matches "/api/foo" exactly OR
+      // "/api/foo/anything", but NOT "/api/foobar". Without the
+      // trailing-slash guard, "/api/me" would also let "/api/metrics"
+      // through, accidentally widening the public surface as new
+      // routes get added.
+      const startsWithSeg = (prefix: string) =>
+        pathname === prefix || pathname.startsWith(prefix + "/");
+
       // NextAuth's own endpoints (csrf, signin, callback, session, providers) must be public.
-      if (pathname.startsWith("/api/auth")) return true;
-      if (pathname.startsWith("/api/webhook")) return true;
+      if (startsWithSeg("/api/auth")) return true;
+      if (startsWithSeg("/api/webhook")) return true;
       // Cron endpoints enforce their own Bearer-token auth (CRON_SECRET);
       // letting NextAuth redirect them to /sign-in would break the
       // scheduled job invocations from EC2 crond / Vercel cron.
-      if (pathname.startsWith("/api/cron")) return true;
+      if (startsWithSeg("/api/cron")) return true;
+      // Client-portal API routes use the passwordless ClientSession
+      // cookie via requireClient(), not NextAuth. They enforce their
+      // own ownership checks in the route handlers.
+      if (startsWithSeg("/api/me")) return true;
       return !!auth;
     },
   },

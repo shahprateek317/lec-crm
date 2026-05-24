@@ -349,6 +349,16 @@ async function main() {
       bodyTemplate:
         "Namaste {{1}} 🙏\n\nYour Life Energy Centre sign-in code is:\n\n*{{2}}*\n\nOr tap to sign in instantly:\n{{3}}\n\nThis code is valid for 15 minutes. If you didn't request this, ignore this message.",
     },
+    {
+      // Phase 2b — pre-session reminder cron.
+      // {{1}} client first name, {{2}} healer name, {{3}} session time (e.g. "5:30 PM"),
+      // {{4}} mode label ("in person at the centre" or "distant healing")
+      name: "healing_reminder_1h",
+      category: "UTILITY",
+      description: "1-hour reminder before a scheduled healing session.",
+      bodyTemplate:
+        "Namaste {{1}} 🙏\n\nA gentle reminder — your healing session with {{2}} starts in about an hour at {{3}} ({{4}}).\n\nPlease be settled and quiet a few minutes before we begin.\n\n— Life Energy Centre",
+    },
   ];
   for (const t of templates) {
     await prisma.whatsAppTemplate.upsert({

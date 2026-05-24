@@ -496,16 +496,71 @@ S3-failure handling, per-client error isolation, limit respect).
 
 ---
 
-## 16. Known limitations & follow-ups (post-Phase 2a)
+## 16. Phase 2b (May 2026) — /me/documents + healer earnings + reminder cron
+
+Three more loops closed. Builds on the cron + uploads + notify infra
+shipped in Phase 1a/2a.
+
+What shipped
+- **Pre-session WhatsApp reminder cron** at `/api/cron/send-session-reminders`.
+  Runs every 10 minutes from EC2 crond + Vercel cron. Finds
+  `HealingSession`s where `date IN [now+55m, now+65m)` and
+  `reminderSentAt IS NULL`. Atomic claim via conditional `updateMany`
+  so concurrent runs can't double-send. WhatsApp template
+  `healing_reminder_1h` (added to seed). On send: marks
+  `reminderSentAt`, creates a SESSION_REMINDER_1H notification for
+  the healer. On send failure: rolls the claim back so the next run
+  retries. Batches up to 200×5 = 1000 sessions per pass; warns
+  loudly if it hits the cap.
+- **`/me/documents`** (client portal). Clients upload medical reports
+  via a new `<MedicalReportUploader />` (mirrors the cert uploader's
+  3-step browser dance). Lists their uploaded reports with view +
+  delete. Owner-scoped: a client can never see another client's row.
+  - Downloads via new `/api/me/documents/[id]` route (mirrors the
+    staff `/api/documents/[id]` but uses `requireClient()`).
+  - Returns 404 (not 403) on cross-client probes — no existence leak.
+- **`/my-earnings`** (healer page). Read-only view of completed
+  sessions × `HealerProfile.{perSessionCharge, revenueSharePercent,
+  acceptsDemoFree}`. Buckets: this month / last month / this year /
+  last year (auto-hides) / lifetime. Per-session table for the last 30.
+  Pure formula in `src/lib/earnings.ts` so payroll exports (future)
+  will agree with what the healer sees.
+
+Schema
+- `HealingSession.reminderSentAt TIMESTAMP(3)` + partial index
+  `WHERE reminderSentAt IS NULL` (covers the cron's hot query).
+
+Auth
+- `auth.config.ts` allowlist tightened to exact-segment matching
+  (`/api/me` no longer accidentally lets `/api/metrics` through).
+
+Run the reminder cron on EC2 (one-time, idempotent):
+```
+ssh ubuntu@13.204.229.25
+sudo bash /opt/lec-crm/scripts/install-reminder-cron.sh
+```
+Same `CRON_SECRET` as the reconciler. Crontab entry runs every
+10 minutes; reads the secret from `/opt/lec-crm/.env` per-tick.
+
+Tests: 78 → 105 vitest cases (added 10 reminder + 17 earnings tests
+covering window math, formula edge cases, Jan-1 year-boundary,
+free-demo handling, rounding, batch / batch-cap behaviour).
+
+---
+
+## 17. Known limitations & follow-ups (post-Phase 2b)
 
 - **No CI/CD** — deploys are manual rsync + rebuild. Acceptable for one-server, single-developer ops.
 - **Single AZ** — no automatic failover. If `ap-south-1a` has issues, we're down. Adding a multi-AZ RDS + auto-scaling would 3-4× the bill and is overkill for this scale.
 - **Image not tagged by SHA** — rollback requires identifying old image SHA manually. Easy improvement when desired.
 - **No staging environment** — changes deploy direct to prod. Fine while we have low traffic; add staging when traffic justifies.
+- **TOTP 2FA for admin roles** — pulled out of Phase 2b for its own focused commit (Phase 2c). Modifies the staff sign-in critical path; deserves a separate security review.
 - **WhatsApp permanent token via System Users** — see /settings/whatsapp; deferred until Meta's display name approval clears.
-- **Soft-delete UI for clients not yet wired** — `Client.deletedAt` is supported by the reconciler but there's no user-facing "delete my account" button on /me/profile yet, and no admin "delete client" affordance on /leads/[id]. Add to Phase 2b.
-- **Two-way `/me/messages`** — Phase 2; today it's read-only.
+- **Soft-delete UI for clients not yet wired** — `Client.deletedAt` is supported by the reconciler but there's no user-facing "delete my account" button on /me/profile yet, and no admin "delete client" affordance on /leads/[id]. Add to Phase 2c.
+- **Two-way `/me/messages`** — Phase 2c; today it's read-only.
 - **Razorpay top-up + course enrolment** — Phase 2 (#7); KYC-blocked externally so the implementation will scaffold + mock until live.
 - **No notification preferences / email digest** — staff get every relevant `notify()` write in the bell. A future "email me a daily digest" or per-kind opt-out lives in Phase 2c.
 - **Reconciler S3-failure retry sweep** — if S3 is flaky the row is marked scrubbed but the orphan key remains. A separate sweep (Phase 2c) reconciles orphaned storage keys.
+- **Client-portal downloads don't write AuditLog entries** — `/api/me/documents/[id]` skips the audit write because `AuditLog.actor` requires a User FK and the actor here is a Client. Phase 2c will polymorphize the actor column.
+- **Healer payouts vs earnings** — `/my-earnings` shows what payroll *should* pay. Actual paid-out tracking ships in Phase 2c with a `HealerPayout` model.
 - **Vercel deployment is still live** at `lec-crm.vercel.app`. Once dad's testing on `crm.lifeenergycentre.in` is settled, decommission Vercel.

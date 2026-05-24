@@ -14,6 +14,7 @@ import {
   Shield,
   Sparkles,
   ChevronRight,
+  FileText,
 } from "lucide-react";
 import { requireClient } from "@/lib/me-session";
 import { prisma } from "@/lib/prisma";
@@ -139,6 +140,11 @@ export default async function MeDashboardPage() {
             href="/me/messages"
             icon={<CalendarHeart className="h-4 w-4 text-emerald-700" />}
             label="Messages with the centre"
+          />
+          <RowLink
+            href="/me/documents"
+            icon={<FileText className="h-4 w-4 text-sky-700" />}
+            label="Your documents"
           />
         </CardContent>
       </Card>

@@ -21,6 +21,7 @@ import {
   Clock,
   ClipboardList,
   UserCircle,
+  TrendingUp,
 } from "lucide-react";
 
 const NAV: Array<{ href: string; label: string; short: string; icon: React.ComponentType<{ className?: string }>; roles?: string[] }> = [
@@ -34,6 +35,7 @@ const NAV: Array<{ href: string; label: string; short: string; icon: React.Compo
   { href: "/courses",         label: "Courses",              short: "Courses",    icon: GraduationCap },
   { href: "/follow-ups",      label: "Follow-ups",           short: "Follow-ups", icon: Clock },
   { href: "/me/profile",      label: "My profile",           short: "Me",         icon: UserCircle, roles: ["HEALER", "SENIOR_HEALER"] },
+  { href: "/my-earnings",     label: "My earnings",          short: "Earnings",   icon: TrendingUp, roles: ["HEALER", "SENIOR_HEALER"] },
   { href: "/quality",         label: "Quality",              short: "Quality",    icon: ClipboardList, roles: ["ADMIN", "SUPER_ADMIN", "QUALITY_CONTROLLER"] },
   { href: "/settings",        label: "Settings",             short: "Settings",   icon: Settings, roles: ["ADMIN", "SUPER_ADMIN"] },
 ];

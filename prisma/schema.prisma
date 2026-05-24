@@ -643,6 +643,10 @@ model HealingSession {
   endCheckInToken        String?   @unique
   clientConfirmedEndAt   DateTime?
 
+  // Phase 2b — set by the pre-session reminder cron after a successful
+  // 1-hour WhatsApp ping. NULL = "never sent" so the cron can dedupe.
+  reminderSentAt DateTime?
+
   creditEntry  CreditLedgerEntry?
   feedback     ClientFeedback?
   qualityNotes QualityNote[]
