@@ -444,14 +444,68 @@ deferred to Phase 2 (Playwright once the surfaces stabilise).
 
 ---
 
-## 15. Known limitations & follow-ups (post-Phase 1)
+## 15. Phase 2a (May 2026) — audit log + notifications + reconciler
+
+Closes three loops Phase 1 left open: the AuditLog had no reader, the
+Notification model was unused, and `Client.deletedAt` had no cleanup.
+
+What shipped
+- **Admin audit-log viewer** at `/settings/audit-log` (admin-only).
+  Filters by action, actor, target type, and date range. URL-encoded
+  so any view is bookmarkable. 50 entries per page.
+- **In-app notification bell** in the staff layout (desktop sidebar +
+  mobile header). Shows the unread count badge and a popover with the
+  10 most recent. Auto-refreshes on window focus + every 60s when the
+  tab is visible.
+- **Three `notify()` sources wired:**
+  - new inbound WhatsApp → thread assignee (or client's coordinator)
+  - QC writes a `needsHealerAttention` or `escalated` note → healer
+  - certification verified → healer
+- **DPDP tombstone reconciler** at `/api/cron/reconcile-deleted-clients`.
+  Policy: **anonymize in place** after 30 days — we do NOT hard-delete
+  the row (HealingSession.client has `onDelete: Cascade`, so deletion
+  would wipe healer revenue history). Identity fields go to nulls;
+  name becomes "Deleted Client #…"; phone becomes `deleted-<id>` so
+  the `@unique` constraint survives. Associated medical reports / photos
+  ARE hard-removed from S3 (the DPDP-sensitive bytes). Document rows
+  are kept but marked `FAILED` with a sentinel `storageKey` so any
+  cached presigned URL cannot resurrect the file.
+- One `CLIENT_HARD_DELETED` audit row written per anonymized client,
+  attributed to the first SUPER_ADMIN (cron has no session).
+
+Run the reconciler cron on EC2 (one-time, idempotent):
+```
+ssh ubuntu@13.204.229.25
+cd /opt/lec-crm
+sudo bash scripts/install-reconciler-cron.sh
+```
+Installs a crontab entry at 02:30 UTC (08:00 IST) daily that calls
+the local endpoint with `CRON_SECRET` from `/opt/lec-crm/.env`.
+**Pre-req:** set `CRON_SECRET=<random>` in `.env` first if not present.
+
+To verify manually:
+```
+set -a; . /opt/lec-crm/.env; set +a
+curl -sS -H "Authorization: Bearer $CRON_SECRET" \
+  http://127.0.0.1:3000/api/cron/reconcile-deleted-clients | jq .
+```
+
+Tests: 65 → 78 vitest cases (added 13 reconciler tests covering
+candidate selection, idempotent skip on already-anonymized rows,
+S3-failure handling, per-client error isolation, limit respect).
+
+---
+
+## 16. Known limitations & follow-ups (post-Phase 2a)
 
 - **No CI/CD** — deploys are manual rsync + rebuild. Acceptable for one-server, single-developer ops.
 - **Single AZ** — no automatic failover. If `ap-south-1a` has issues, we're down. Adding a multi-AZ RDS + auto-scaling would 3-4× the bill and is overkill for this scale.
 - **Image not tagged by SHA** — rollback requires identifying old image SHA manually. Easy improvement when desired.
 - **No staging environment** — changes deploy direct to prod. Fine while we have low traffic; add staging when traffic justifies.
 - **WhatsApp permanent token via System Users** — see /settings/whatsapp; deferred until Meta's display name approval clears.
-- **Hard-delete reconciler not yet running** — `Client.deletedAt` is set by /me/profile's delete-account action but the nightly cron that hard-deletes after 30 days isn't wired. Add to Phase 2.
+- **Soft-delete UI for clients not yet wired** — `Client.deletedAt` is supported by the reconciler but there's no user-facing "delete my account" button on /me/profile yet, and no admin "delete client" affordance on /leads/[id]. Add to Phase 2b.
 - **Two-way `/me/messages`** — Phase 2; today it's read-only.
-- **Audit log viewer at /settings/audit-log** — entries are being written but the admin viewer ships in Phase 2.
+- **Razorpay top-up + course enrolment** — Phase 2 (#7); KYC-blocked externally so the implementation will scaffold + mock until live.
+- **No notification preferences / email digest** — staff get every relevant `notify()` write in the bell. A future "email me a daily digest" or per-kind opt-out lives in Phase 2c.
+- **Reconciler S3-failure retry sweep** — if S3 is flaky the row is marked scrubbed but the orphan key remains. A separate sweep (Phase 2c) reconciles orphaned storage keys.
 - **Vercel deployment is still live** at `lec-crm.vercel.app`. Once dad's testing on `crm.lifeenergycentre.in` is settled, decommission Vercel.
