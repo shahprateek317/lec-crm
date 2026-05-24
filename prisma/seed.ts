@@ -340,6 +340,15 @@ async function main() {
       bodyTemplate:
         "Namaste {{1}} 🙏\n\nYour healing session with {{2}} ({{3}} – now) has ended. Please confirm by tapping the link below:\n\n{{4}}\n\nWe'll send a short feedback request next. 🙏\n— Life Energy Centre",
     },
+    {
+      // Phase 1b — passwordless client portal auth.
+      // {{1}} client first name, {{2}} 6-digit OTP, {{3}} magic-link URL
+      name: "client_magic_link",
+      category: "AUTHENTICATION",
+      description: "Passwordless sign-in to the client portal — OTP + tap-to-sign-in link, expires in 15 minutes.",
+      bodyTemplate:
+        "Namaste {{1}} 🙏\n\nYour Life Energy Centre sign-in code is:\n\n*{{2}}*\n\nOr tap to sign in instantly:\n{{3}}\n\nThis code is valid for 15 minutes. If you didn't request this, ignore this message.",
+    },
   ];
   for (const t of templates) {
     await prisma.whatsAppTemplate.upsert({

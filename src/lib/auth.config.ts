@@ -29,7 +29,10 @@ export const authConfig = {
     authorized({ auth, request }) {
       // /confirm/[token] is the public landing for session check-in links
       // sent to clients via WhatsApp — the token IS the auth, so no login.
-      const publicPaths = ["/", "/sign-in", "/enquiry", "/api/enquiry", "/dev/pay", "/confirm"];
+      // /me/* uses a separate session cookie (passwordless WhatsApp magic-
+      // link / OTP) — it bypasses NextAuth's gate here and runs its own
+      // check via requireClient() in the route layer.
+      const publicPaths = ["/", "/sign-in", "/enquiry", "/api/enquiry", "/dev/pay", "/confirm", "/me"];
       const { pathname } = request.nextUrl;
       if (publicPaths.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
         return true;
