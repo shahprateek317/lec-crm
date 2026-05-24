@@ -40,6 +40,10 @@ export const authConfig = {
       // NextAuth's own endpoints (csrf, signin, callback, session, providers) must be public.
       if (pathname.startsWith("/api/auth")) return true;
       if (pathname.startsWith("/api/webhook")) return true;
+      // Cron endpoints enforce their own Bearer-token auth (CRON_SECRET);
+      // letting NextAuth redirect them to /sign-in would break the
+      // scheduled job invocations from EC2 crond / Vercel cron.
+      if (pathname.startsWith("/api/cron")) return true;
       return !!auth;
     },
   },
