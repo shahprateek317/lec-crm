@@ -9,6 +9,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireSession, canAuditQuality } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
+import { notify } from "@/lib/notify";
 import type { QualityRating } from "@prisma/client";
 
 async function requireQc() {
@@ -42,10 +43,11 @@ export async function addQualityNoteAction(formData: FormData) {
     redirect(`/quality/sessions/${String(formData.get("sessionId") ?? "")}?error=invalid`);
   }
 
-  // Verify the session exists; capture for the audit log.
+  // Verify the session exists; capture the healer + client for the
+  // notification fan-out below.
   const hsExists = await prisma.healingSession.findUnique({
     where: { id: parsed.data.sessionId },
-    select: { id: true },
+    select: { id: true, healerId: true, client: { select: { name: true } } },
   });
   if (!hsExists) redirect("/quality?error=not_found");
 
@@ -59,6 +61,21 @@ export async function addQualityNoteAction(formData: FormData) {
       escalated: parsed.data.escalated ?? false,
     },
   });
+
+  // Notify the healer when QC flags a note for their attention or
+  // escalates it. Plain notes (acknowledgement-only) don't generate
+  // notifications — they'd be too noisy in a busy clinic.
+  if (parsed.data.needsHealerAttention || parsed.data.escalated) {
+    await notify({
+      recipientId: hsExists.healerId,
+      kind: "QC_FLAGGED_SESSION",
+      title: parsed.data.escalated
+        ? "Quality escalated a session for review"
+        : "Quality flagged a session for your attention",
+      body: `Session for ${hsExists.client.name} — ${parsed.data.note.slice(0, 100)}${parsed.data.note.length > 100 ? "…" : ""}`,
+      href: `/healing/${parsed.data.sessionId}`,
+    });
+  }
 
   await audit("HEALING_SESSION_VIEWED", "HealingSession", parsed.data.sessionId, {
     actorId: session.user.id,
@@ -117,6 +134,16 @@ export async function verifyCertificationAction(formData: FormData) {
   await audit("CERT_VERIFIED", "HealerCertificate", certId, {
     actorId: session.user.id,
     meta: { healerUserId: cert.userId },
+  });
+
+  // Notify the healer that one of their uploaded certs has been
+  // verified — closes the loop for them after submission.
+  await notify({
+    recipientId: cert.userId,
+    kind: "CERT_VERIFIED",
+    title: "A certification was verified",
+    body: verifierNotes ? `Note: ${verifierNotes.slice(0, 120)}` : undefined,
+    href: "/me/profile",
   });
 
   revalidatePath(`/quality/healers/${cert.userId}`);

@@ -338,3 +338,25 @@ export async function deleteDocument(
     });
   }
 }
+
+/**
+ * Low-level S3 object delete. Returns true on success, false on error.
+ * Used by the DPDP reconciler — which keeps the Document row (scrubbed)
+ * so we can prove what was removed, but wants the actual bytes gone.
+ *
+ * Errors are caught + logged, never thrown, so the reconciler can mark
+ * the row scrubbed even if S3 is temporarily flaky. A separate sweep
+ * (Phase 2c) reconciles orphaned storage keys.
+ */
+export async function deleteFromS3(key: string): Promise<boolean> {
+  try {
+    await s3().send(new DeleteObjectCommand({
+      Bucket: env.S3_UPLOADS_BUCKET,
+      Key: key,
+    }));
+    return true;
+  } catch (err) {
+    console.error("[uploads] deleteFromS3 failed", { key }, err);
+    return false;
+  }
+}

@@ -1,11 +1,13 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { signOutAction } from "./actions";
 import { t } from "@/lib/i18n";
 import { CommandPalette } from "@/components/command-palette";
 import { InstallPrompt } from "@/components/install-prompt";
 import { InstallAppPrompt } from "@/components/install-app-prompt";
+import { NotificationBell } from "@/components/notification-bell";
 import {
   LayoutDashboard,
   Users,
@@ -43,6 +45,21 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const visible = NAV.filter((n) => !n.roles || n.roles.includes(session.user.role));
   const roleLabel = t.roles[session.user.role as keyof typeof t.roles] ?? session.user.role;
 
+  // Notification bell data — unread count drives the badge; top 10
+  // (read + unread) populate the popover. Both queries hit a covering
+  // index on (recipientId, readAt) / (recipientId, createdAt).
+  const [unreadCount, recentNotifications] = await Promise.all([
+    prisma.notification.count({
+      where: { recipientId: session.user.id, readAt: null },
+    }),
+    prisma.notification.findMany({
+      where: { recipientId: session.user.id },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: { id: true, title: true, body: true, href: true, readAt: true, createdAt: true },
+    }),
+  ]);
+
   return (
     <div className="min-h-screen bg-sidebar text-sidebar-foreground">
       <div className="flex min-h-screen">
@@ -76,10 +93,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               Press <kbd className="rounded border border-border bg-card px-1.5 py-0.5 text-[10px] font-mono">⌘K</kbd> to search anywhere
             </p>
             <div className="rounded-lg bg-sidebar-accent/40 p-3">
-              <p className="text-xs font-medium text-sidebar-foreground">
-                {session.user.name}
-              </p>
-              <p className="text-xs text-muted-foreground">{roleLabel}</p>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-medium text-sidebar-foreground">
+                    {session.user.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{roleLabel}</p>
+                </div>
+                <NotificationBell
+                  unreadCount={unreadCount}
+                  items={recentNotifications}
+                />
+              </div>
               <form action={signOutAction} className="mt-2">
                 <button
                   type="submit"
@@ -106,15 +131,21 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                   {session.user.name} · {roleLabel}
                 </span>
               </Link>
-              <form action={signOutAction}>
-                <button
-                  type="submit"
-                  className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
-                >
-                  <LogOut className="h-3.5 w-3.5" />
-                  Sign out
-                </button>
-              </form>
+              <div className="flex items-center gap-1">
+                <NotificationBell
+                  unreadCount={unreadCount}
+                  items={recentNotifications}
+                />
+                <form action={signOutAction}>
+                  <button
+                    type="submit"
+                    className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                    Sign out
+                  </button>
+                </form>
+              </div>
             </div>
           </header>
 

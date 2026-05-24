@@ -9,6 +9,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getSetting, SETTING_KEYS } from "@/lib/settings";
+import { notify } from "@/lib/notify";
 import type {
   WhatsAppMessage,
   WhatsAppStatus,
@@ -153,6 +154,31 @@ export async function touchThread(params: {
           lastOutboundAt: params.at,
         },
   });
+
+  // Notify the right coordinator on inbound. Preference order:
+  //   1. Thread assignee (the person who explicitly owns this conversation)
+  //   2. Client.assignedTo (the coordinator who owns the relationship)
+  // We do NOT broadcast to all coordinators — that would create alert
+  // fatigue. The Inbox page exists for the "all open" view; the bell is
+  // only for messages someone is responsible for.
+  if (isInbound) {
+    const ctx = await prisma.whatsAppThread.findUnique({
+      where: { clientId: params.clientId },
+      select: {
+        assigneeId: true,
+        client: { select: { name: true, assignedToId: true } },
+      },
+    });
+    const recipientId = ctx?.assigneeId ?? ctx?.client.assignedToId ?? null;
+    if (recipientId && ctx) {
+      await notify({
+        recipientId,
+        kind: "NEW_INBOUND_MESSAGE",
+        title: `New WhatsApp from ${ctx.client.name}`,
+        href: `/inbox/${params.clientId}`,
+      });
+    }
+  }
 }
 
 function normalizePhone(phone: string): string {
