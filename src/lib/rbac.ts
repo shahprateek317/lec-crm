@@ -10,6 +10,17 @@ export const QUALITY_AUDITOR_ROLES: ReadonlyArray<Role> = [
   "SUPER_ADMIN", "ADMIN", "QUALITY_CONTROLLER",
 ];
 
+// Roles that work the centre's WhatsApp inbox (assign, reply, resolve).
+// Counsellors and senior counsellors also see + reply because they often
+// handle the first conversation with a new lead.
+export const INBOX_ROLES: ReadonlyArray<Role> = [
+  "SUPER_ADMIN", "ADMIN", "COORDINATOR", "COUNSELLOR", "SENIOR_COUNSELLOR",
+];
+
+export function canUseInbox(role: Role): boolean {
+  return INBOX_ROLES.includes(role);
+}
+
 export function isAdmin(role: Role): boolean {
   return ADMIN_ROLES.includes(role);
 }
