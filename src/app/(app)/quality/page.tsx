@@ -115,7 +115,11 @@ export default async function QualityPage() {
               <tbody>
                 {healerActivity.map((row) => (
                   <tr key={row.healerId} className="border-t border-border">
-                    <td className="px-4 py-2">{healerName.get(row.healerId) ?? "—"}</td>
+                    <td className="px-4 py-2">
+                      <Link href={`/quality/healers/${row.healerId}`} className="hover:underline">
+                        {healerName.get(row.healerId) ?? "—"}
+                      </Link>
+                    </td>
                     <td className="px-4 py-2 text-right tabular-nums">{row._count}</td>
                     <td className="px-4 py-2 text-right tabular-nums">
                       {row._avg.improvementScore?.toFixed(1) ?? "—"}
@@ -145,19 +149,24 @@ export default async function QualityPage() {
           ) : (
             <ul className="divide-y divide-border">
               {recentSessions.map((s) => (
-                <li key={s.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                  <div className="min-w-0">
-                    <Link href={`/leads/${s.client.id}`} className="font-medium hover:underline">
-                      {s.client.name}
-                    </Link>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {s.healer.name} · {format(s.date, "dd MMM, HH:mm")} ·{" "}
-                      {s.sessionType.toLowerCase()}
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                    Δ {s.improvementScore ?? 0}
-                  </span>
+                <li key={s.id}>
+                  <Link
+                    href={`/quality/sessions/${s.id}`}
+                    className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium text-foreground">
+                        {s.client.name}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {s.healer.name} · {format(s.date, "dd MMM, HH:mm")} ·{" "}
+                        {s.sessionType.toLowerCase()}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                      Δ {s.improvementScore ?? 0}
+                    </span>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -165,10 +174,6 @@ export default async function QualityPage() {
         </CardContent>
       </Card>
 
-      <p className="text-xs text-muted-foreground">
-        Per-session rating + comment audit, healer quality reports, and
-        escalation workflow — coming next.
-      </p>
     </div>
   );
 }
