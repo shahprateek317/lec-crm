@@ -1,3 +1,14 @@
+// Staff sign-in. Two-step when 2FA is enabled:
+//
+//   Step 1 (default):           email + password.
+//   Step 2 (?error=totp_*):     email (readonly), hidden password
+//                               carried forward, 6-digit code field.
+//
+// We don't carry state in a cookie/session — the form just re-renders
+// with the same password in a hidden input and adds the code field.
+// Simpler than a stateful half-session and safer (no half-session to
+// expire / revoke).
+
 import { signInAction } from "./actions";
 import { t } from "@/lib/i18n";
 import Link from "next/link";
@@ -17,10 +28,20 @@ const DEMO_ROLES = [
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; callbackUrl?: string }>;
+  searchParams: Promise<{ error?: string; callbackUrl?: string; email?: string }>;
 }) {
   const sp = await searchParams;
   const isDemo = env.WHATSAPP_PROVIDER === "stub" && env.RAZORPAY_PROVIDER === "stub";
+
+  // 2FA step gate. The action redirects with the user's email in the
+  // query so we can pre-fill + show it read-only on the TOTP step.
+  // Note: we have no way to carry the password through the URL safely.
+  // The form renders a hidden password input that the BROWSER preserved
+  // from the prior submission via autofill / page state — but since we
+  // can't rely on that across a redirect, we re-render the full form
+  // and ask the user to re-enter password + code together. The signIn
+  // action handles both fields in one call.
+  const needsTotp = sp.error === "totp_required" || sp.error === "totp_invalid";
 
   return (
     <main className="pranic-glow flex min-h-screen items-center justify-center px-6 py-12">
@@ -32,10 +53,14 @@ export default async function SignInPage({
           >
             {t.common.appName}
           </Link>
-          <p className="mt-2 text-sm text-muted-foreground">{t.signIn.subtitle}</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {needsTotp ? t.signIn.totpPrompt : t.signIn.subtitle}
+          </p>
         </div>
 
-        {isDemo && (
+        {/* Demo one-tap buttons — only on step 1 so the TOTP step
+            stays focused. */}
+        {isDemo && !needsTotp && (
           <div className="mb-5 space-y-2 rounded-lg bg-muted/50 p-3">
             <p className="text-xs font-medium text-muted-foreground">
               Demo · one-tap sign-in
@@ -86,7 +111,11 @@ export default async function SignInPage({
               autoCorrect="off"
               spellCheck={false}
               required
-              className="flex h-10 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              defaultValue={sp.email ?? ""}
+              readOnly={needsTotp}
+              className={`flex h-10 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring ${
+                needsTotp ? "cursor-not-allowed bg-muted/40 text-muted-foreground" : ""
+              }`}
             />
           </div>
 
@@ -101,13 +130,40 @@ export default async function SignInPage({
               autoComplete="current-password"
               required
               minLength={6}
+              autoFocus={!needsTotp}
               className="flex h-10 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </div>
 
-          {sp.error && (
+          {needsTotp && (
+            <div className="space-y-1.5">
+              <label htmlFor="totpCode" className="text-sm font-medium">
+                {t.signIn.totpLabel}
+              </label>
+              <input
+                id="totpCode"
+                name="totpCode"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9 ]*"
+                autoComplete="one-time-code"
+                maxLength={7}
+                required
+                autoFocus
+                placeholder="123 456"
+                className="flex h-12 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-center font-mono text-lg tracking-widest outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
+          )}
+
+          {sp.error === "invalid" && (
             <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {t.signIn.invalid}
+            </p>
+          )}
+          {sp.error === "totp_invalid" && (
+            <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {t.signIn.totpInvalid}
             </p>
           )}
 
@@ -115,8 +171,17 @@ export default async function SignInPage({
             pendingLabel="Signing in…"
             className="h-11 w-full rounded-lg bg-primary font-medium text-primary-foreground shadow-sm hover:bg-primary/90"
           >
-            {t.signIn.submit}
+            {needsTotp ? t.signIn.totpVerify : t.signIn.submit}
           </SubmitButton>
+
+          {needsTotp && (
+            <Link
+              href={sp.callbackUrl ? `/sign-in?callbackUrl=${encodeURIComponent(sp.callbackUrl)}` : "/sign-in"}
+              className="block text-center text-xs text-muted-foreground hover:text-foreground"
+            >
+              {t.signIn.totpBack}
+            </Link>
+          )}
         </form>
       </div>
     </main>

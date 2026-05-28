@@ -548,19 +548,86 @@ free-demo handling, rounding, batch / batch-cap behaviour).
 
 ---
 
-## 17. Known limitations & follow-ups (post-Phase 2b)
+## 17. Phase 2c (May 2026) — TOTP 2FA + admin soft-delete UI
+
+Auth hardening + the soft-delete loop the reconciler was waiting for.
+
+What shipped
+- **TOTP 2FA for any staff user** at `/settings/security`. Three-state
+  page (off / pending / active). Standard RFC 6238 (6-digit, 30s, SHA-1,
+  ±1 window). Compatible with Google Authenticator, Authy, 1Password,
+  Microsoft Authenticator, Apple's built-in codes. Secret is AES-256-GCM
+  encrypted at rest using a key derived from AUTH_SECRET — same crypto
+  helper that already encrypts WhatsApp / Razorpay tokens (extracted
+  to `src/lib/crypto.ts` for reuse).
+- **Sign-in flow** is a 2-step on accounts with 2FA enabled. The form
+  POSTs email + password; if TOTP is required, NextAuth's authorize
+  throws a `TotpRequiredError`, the action redirects with
+  `?error=totp_required`, and the page renders a 6-digit code input
+  with the email pre-filled (read-only). The user re-enters their
+  password and the code together — no stateful half-session to
+  expire / revoke.
+- **Enrollment is opt-in** for now. Admin enforcement (TOTP REQUIRED
+  for ADMIN / SUPER_ADMIN to sign in) ships in Phase 2d after Papa
+  has tested the enrollment UX. Today the gate at sign-in only fires
+  when `user.totpEnabledAt IS NOT NULL` AND `user.totpSecret IS NOT NULL`.
+- **QR is server-rendered as inline SVG** via the `qrcode` package
+  — secret never travels to a CDN, no client-side QR library bloats
+  the bundle. Manual-entry fallback (chunked base32) shown in a
+  collapsible details block.
+- **Recovery**: if a user loses their authenticator, an admin can
+  reset their TOTP from `/settings/users/[id]` (same surface as
+  password reset). Backup codes are Phase 2d.
+
+Admin soft-delete on `/leads/[id]`
+- New "Danger zone" card visible only to admin roles. Requires a
+  typed confirmation matching the client's first name (case-
+  insensitive, trimmed) so a single accidental click can't soft-
+  delete a real client.
+- Sets `Client.deletedAt = now()`, immediately revokes their /me
+  portal access (filter in `getClient`), and the reconciler will
+  anonymise their identity fields + S3-delete their medical reports
+  after 30 days.
+- Writes a `CLIENT_SOFT_DELETED` audit row attributed to the deleting
+  admin. Idempotent: a concurrent re-delete is a no-op via
+  conditional `updateMany`.
+- Already-soft-deleted clients show an amber banner instead of the
+  danger zone.
+
+Schema
+- `User.totpSecret String?` — AES-GCM ciphertext of the base32 secret
+- `User.totpEnabledAt DateTime?` — set on first successful verify
+
+Auth surface
+- Added `Shield` icon → `/settings/security` in the staff sidebar so
+  non-admin staff can also enroll (the /settings index is admin-only).
+- Added the **Security** tile to /settings.
+
+Independent security review applied
+- 0 BLOCK, 0 HIGH findings. Applied 3 defense-in-depth tightenings:
+  - Tighter Zod schema for TOTP codes (`/^[\d\s]{6,10}$/`)
+  - Explicit `return redirect(...)` in decrypt-failure catch blocks
+  - Conditional `updateMany WHERE deletedAt IS NULL` for soft-delete
+    idempotency, audit only on `count === 1`
+
+Tests: 105 → 123 vitest (added 18 TOTP tests covering secret format,
+URL encoding, drift window, wrong-code rejection, malformed-secret
+tolerance, whitespace-in-code, round-trip).
+
+## 18. Known limitations & follow-ups (post-Phase 2c)
 
 - **No CI/CD** — deploys are manual rsync + rebuild. Acceptable for one-server, single-developer ops.
 - **Single AZ** — no automatic failover. If `ap-south-1a` has issues, we're down. Adding a multi-AZ RDS + auto-scaling would 3-4× the bill and is overkill for this scale.
 - **Image not tagged by SHA** — rollback requires identifying old image SHA manually. Easy improvement when desired.
 - **No staging environment** — changes deploy direct to prod. Fine while we have low traffic; add staging when traffic justifies.
-- **TOTP 2FA for admin roles** — pulled out of Phase 2b for its own focused commit (Phase 2c). Modifies the staff sign-in critical path; deserves a separate security review.
+- **TOTP enforcement is opt-in** — admin accounts can sign in without 2FA today. Phase 2d will (a) add a soft banner urging enrollment, then (b) flip the gate to enforce TOTP for ADMIN + SUPER_ADMIN once Papa's tested it on his own account.
+- **TOTP recovery requires admin reset** — no backup codes yet. Phase 2d will add 10 single-use base32 codes generated at enrollment, displayed once, stored AES-GCM encrypted.
+- **TOTP cleanup** — abandoned enrollments leave an unencrypted pending secret in the DB indefinitely (until cancel/re-enroll/confirm). Low risk (requires AUTH_SECRET + DB compromise to weaponize). A TTL job clearing pending secrets > 24h old is a Phase 2d nice-to-have.
 - **WhatsApp permanent token via System Users** — see /settings/whatsapp; deferred until Meta's display name approval clears.
-- **Soft-delete UI for clients not yet wired** — `Client.deletedAt` is supported by the reconciler but there's no user-facing "delete my account" button on /me/profile yet, and no admin "delete client" affordance on /leads/[id]. Add to Phase 2c.
-- **Two-way `/me/messages`** — Phase 2c; today it's read-only.
+- **Two-way `/me/messages`** — Phase 2d; today it's read-only.
 - **Razorpay top-up + course enrolment** — Phase 2 (#7); KYC-blocked externally so the implementation will scaffold + mock until live.
-- **No notification preferences / email digest** — staff get every relevant `notify()` write in the bell. A future "email me a daily digest" or per-kind opt-out lives in Phase 2c.
-- **Reconciler S3-failure retry sweep** — if S3 is flaky the row is marked scrubbed but the orphan key remains. A separate sweep (Phase 2c) reconciles orphaned storage keys.
-- **Client-portal downloads don't write AuditLog entries** — `/api/me/documents/[id]` skips the audit write because `AuditLog.actor` requires a User FK and the actor here is a Client. Phase 2c will polymorphize the actor column.
-- **Healer payouts vs earnings** — `/my-earnings` shows what payroll *should* pay. Actual paid-out tracking ships in Phase 2c with a `HealerPayout` model.
+- **No notification preferences / email digest** — staff get every relevant `notify()` write in the bell. A future "email me a daily digest" or per-kind opt-out lives in Phase 2d.
+- **Reconciler S3-failure retry sweep** — if S3 is flaky the row is marked scrubbed but the orphan key remains. A separate sweep (Phase 2d) reconciles orphaned storage keys.
+- **Client-portal downloads don't write AuditLog entries** — `/api/me/documents/[id]` skips the audit write because `AuditLog.actor` requires a User FK and the actor here is a Client. Phase 2d will polymorphize the actor column.
+- **Healer payouts vs earnings** — `/my-earnings` shows what payroll *should* pay. Actual paid-out tracking ships in Phase 2d with a `HealerPayout` model.
 - **Vercel deployment is still live** at `lec-crm.vercel.app`. Once dad's testing on `crm.lifeenergycentre.in` is settled, decommission Vercel.

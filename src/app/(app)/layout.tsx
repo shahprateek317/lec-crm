@@ -22,6 +22,7 @@ import {
   ClipboardList,
   UserCircle,
   TrendingUp,
+  Shield,
 } from "lucide-react";
 
 const NAV: Array<{ href: string; label: string; short: string; icon: React.ComponentType<{ className?: string }>; roles?: string[] }> = [
@@ -107,15 +108,24 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                   items={recentNotifications}
                 />
               </div>
-              <form action={signOutAction} className="mt-2">
-                <button
-                  type="submit"
-                  className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground"
+              <div className="mt-2 flex items-center gap-3">
+                <Link
+                  href="/settings/security"
+                  className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
                 >
-                  <LogOut className="h-3.5 w-3.5" />
-                  {t.common.signOut}
-                </button>
-              </form>
+                  <Shield className="h-3.5 w-3.5" />
+                  Security
+                </Link>
+                <form action={signOutAction}>
+                  <button
+                    type="submit"
+                    className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                    {t.common.signOut}
+                  </button>
+                </form>
+              </div>
             </div>
           </div>
         </aside>

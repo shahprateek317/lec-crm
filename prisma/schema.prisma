@@ -106,6 +106,13 @@ model User {
   role          Role
   active        Boolean @default(true)
 
+  // Phase 2c — TOTP 2FA. Secret is AES-256-GCM encrypted via
+  // @/lib/crypto. totpEnabledAt is set on the user's first
+  // successful code verification; before that, the secret exists
+  // (enrollment in progress) but sign-in does not check it.
+  totpSecret    String?
+  totpEnabledAt DateTime?
+
   // Common HR/profile fields used across all roles.
   employeeCode     String?   @unique
   gender           Gender?

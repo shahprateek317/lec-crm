@@ -25,6 +25,12 @@ export const en = {
     password: "Password",
     submit: "Sign in",
     invalid: "That email and password don't match any active account.",
+    // TOTP 2-step flow
+    totpLabel: "Authenticator code",
+    totpPrompt: "Enter the 6-digit code from your authenticator app to continue.",
+    totpInvalid: "That code didn't match. Try again with the latest 6-digit code from your app.",
+    totpVerify: "Verify",
+    totpBack: "← Use a different account",
   },
   enquiry: {
     title: "New enquiry",

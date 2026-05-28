@@ -1,13 +1,22 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, User, Phone, MapPin, Clock, MessagesSquare, ArrowRight, Calendar, CheckCircle2, Wallet, Sparkles, UsersRound, Gift } from "lucide-react";
+import { ChevronLeft, User, Phone, MapPin, Clock, MessagesSquare, ArrowRight, Calendar, CheckCircle2, Wallet, Sparkles, UsersRound, Gift, AlertTriangle, Trash2 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
+import { auth } from "@/lib/auth";
+import { isAdmin } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { allowedNextStages, STAGE_TONE } from "@/lib/pipeline";
 import { StageBadge } from "@/components/leads/stage-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SubmitButton } from "@/components/submit-button";
 import { getCreditBalance } from "@/lib/credits";
-import { assignLeadAction, transitionStageAction, updateLeadNotesAction, sendTemplateAction } from "./actions";
+import {
+  assignLeadAction,
+  transitionStageAction,
+  updateLeadNotesAction,
+  sendTemplateAction,
+  softDeleteClientAction,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -17,8 +26,17 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return { title: client ? client.name : "Lead" };
 }
 
-export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function LeadDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string; ok?: string }>;
+}) {
   const { id } = await params;
+  const sp = await searchParams;
+  const session = await auth();
+  const viewerIsAdmin = !!session?.user && isAdmin(session.user.role);
 
   const creditBalance = await getCreditBalance(id);
   const [client, staff, templates, counsellings, visits, recentPayments, recentHealing] = await Promise.all([
@@ -526,6 +544,83 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           </Card>
         </div>
       </div>
+
+      {/* Soft-delete banner — visible to everyone (the lead is in a
+          tombstone window). */}
+      {client.deletedAt && (
+        <Card className="rounded-2xl border-amber-200 bg-amber-50/60">
+          <CardContent className="flex items-start gap-3 py-4">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+            <div className="text-sm">
+              <p className="font-medium text-amber-900">
+                This client was soft-deleted on {format(client.deletedAt, "d MMM yyyy")}
+              </p>
+              <p className="mt-0.5 text-amber-900/80">
+                Their portal access is revoked. Identifying fields will be
+                anonymised by the nightly reconciler 30 days after deletion.
+                Until then, an admin can restore them by clearing
+                <code className="mx-1 rounded bg-amber-100 px-1 py-0.5 text-[11px]">deletedAt</code>
+                directly in the database.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Danger zone — admin only, only shown if the client isn't
+          already soft-deleted. Requires a typed confirmation phrase
+          (first name) to avoid accidental clicks. */}
+      {viewerIsAdmin && !client.deletedAt && (
+        <Card className="rounded-2xl border-destructive/30">
+          <CardContent className="space-y-3 py-5">
+            <div className="space-y-1">
+              <p className="flex items-center gap-2 font-medium text-destructive">
+                <AlertTriangle className="h-4 w-4" />
+                Danger zone — soft-delete this client
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Marks the client deleted and revokes their /me portal
+                access immediately. Their healing history stays in the
+                database (so healer revenue records are preserved) but
+                identity fields will be anonymised by the nightly
+                reconciler after 30 days. Medical-report files are
+                deleted from S3 at that time too. Type
+                <strong className="mx-1 text-foreground">{client.name.split(" ")[0]}</strong>
+                to confirm.
+              </p>
+              {sp.error === "confirm_mismatch" && (
+                <p className="rounded-md bg-destructive/10 px-2 py-1 text-xs text-destructive">
+                  The confirmation phrase didn&apos;t match. Type the
+                  client&apos;s first name exactly.
+                </p>
+              )}
+              {sp.error === "forbidden" && (
+                <p className="rounded-md bg-destructive/10 px-2 py-1 text-xs text-destructive">
+                  Admin role required to soft-delete a client.
+                </p>
+              )}
+            </div>
+            <form action={softDeleteClientAction} className="flex flex-wrap items-end gap-3">
+              <input type="hidden" name="clientId" value={client.id} />
+              <input
+                type="text"
+                name="confirm"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder={`Type "${client.name.split(" ")[0]}" to confirm`}
+                className="h-10 w-64 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              <SubmitButton
+                pendingLabel="Deleting…"
+                className="inline-flex h-10 items-center gap-1.5 rounded-md bg-destructive px-3 text-sm font-medium text-destructive-foreground hover:bg-destructive/90"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Soft-delete client
+              </SubmitButton>
+            </form>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

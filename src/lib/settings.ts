@@ -7,33 +7,14 @@
 // AUTH_SECRET. If AUTH_SECRET rotates, encrypted values become unrecoverable
 // and admin will need to re-paste them.
 
-import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
+import { encryptForStorage, decryptFromStorage } from "@/lib/crypto";
 
-// ── Encryption ────────────────────────────────────────────────────────
-function key(): Buffer {
-  return crypto.createHash("sha256").update(env.AUTH_SECRET).digest();
-}
-
-function encrypt(plaintext: string): string {
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv("aes-256-gcm", key(), iv);
-  const enc = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return Buffer.concat([iv, enc, tag]).toString("base64");
-}
-
-function decrypt(b64: string): string {
-  const buf = Buffer.from(b64, "base64");
-  const iv = buf.subarray(0, 12);
-  const tag = buf.subarray(buf.length - 16);
-  const enc = buf.subarray(12, buf.length - 16);
-  const decipher = crypto.createDecipheriv("aes-256-gcm", key(), iv);
-  decipher.setAuthTag(tag);
-  const dec = Buffer.concat([decipher.update(enc), decipher.final()]);
-  return dec.toString("utf8");
-}
+// Local aliases keep the original call sites readable. The
+// at-rest crypto lives in `@/lib/crypto` now — reused by TOTP secrets.
+const encrypt = encryptForStorage;
+const decrypt = decryptFromStorage;
 
 // ── Setting keys ──────────────────────────────────────────────────────
 export const SETTING_KEYS = {

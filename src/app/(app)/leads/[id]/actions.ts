@@ -1,10 +1,12 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireSession } from "@/lib/rbac";
+import { requireSession, isAdmin } from "@/lib/rbac";
 import { transitionStage } from "@/lib/pipeline";
 import { getWhatsAppProvider } from "@/lib/providers/whatsapp";
+import { audit } from "@/lib/audit";
 import type { PipelineStage } from "@prisma/client";
 
 export async function transitionStageAction(formData: FormData) {
@@ -74,4 +76,71 @@ export async function sendTemplateAction(formData: FormData) {
     variables,
   });
   revalidatePath(`/leads/${clientId}`);
+}
+
+/**
+ * Admin-only soft-delete. Sets Client.deletedAt = now() so the
+ * tombstone reconciler (Phase 2a) anonymizes the row after 30 days.
+ *
+ * Requires a typed confirmation phrase to defend against accidental
+ * clicks — the operator must type the client's first name. We compare
+ * case-insensitively + trim to be forgiving of typing variance.
+ *
+ * Idempotent: re-deleting a soft-deleted row is a no-op (the deletedAt
+ * column is set to the LATER timestamp so the tombstone window resets).
+ *
+ * After soft-delete:
+ *   - The client is hidden from /me/sessions, /me, /me/* (via
+ *     getClient deletedAt check).
+ *   - The reminder cron skips them (already wired).
+ *   - The reconciler will scrub their medical reports + identity
+ *     fields after 30 days.
+ *   - Audit log records the operator + the client name so we can
+ *     trace post-mortem.
+ */
+export async function softDeleteClientAction(formData: FormData) {
+  const session = await requireSession();
+  if (!isAdmin(session.user.role)) {
+    redirect(`/leads/${formData.get("clientId") ?? ""}?error=forbidden`);
+  }
+
+  const clientId = String(formData.get("clientId") ?? "");
+  const confirm = String(formData.get("confirm") ?? "").trim().toLowerCase();
+  if (!clientId) redirect("/leads?error=missing_client");
+
+  const client = await prisma.client.findUnique({
+    where: { id: clientId },
+    select: { name: true, phone: true, deletedAt: true },
+  });
+  if (!client) redirect("/leads?error=not_found");
+
+  const expectedFirstName = (client.name.split(" ")[0] ?? "").trim().toLowerCase();
+  if (!expectedFirstName || confirm !== expectedFirstName) {
+    redirect(`/leads/${clientId}?error=confirm_mismatch`);
+  }
+
+  // Conditional update: only flip `deletedAt` if it's still NULL. If
+  // two admins race the action, the second `count` is 0 and we skip
+  // the duplicate audit row — keeps the audit log clean while still
+  // recording the actual deleter.
+  const result = await prisma.client.updateMany({
+    where: { id: clientId, deletedAt: null },
+    data: { deletedAt: new Date() },
+  });
+
+  if (result.count === 1) {
+    await audit("CLIENT_SOFT_DELETED", "Client", clientId, {
+      actorId: session.user.id,
+      meta: {
+        clientNameAtDelete: client.name,
+        phoneAtDelete: client.phone,
+        tombstoneDays: 30,
+      },
+    });
+  }
+
+  revalidatePath(`/leads/${clientId}`);
+  revalidatePath(`/leads`);
+  revalidatePath(`/dashboard`);
+  redirect(`/leads?ok=soft_deleted`);
 }
