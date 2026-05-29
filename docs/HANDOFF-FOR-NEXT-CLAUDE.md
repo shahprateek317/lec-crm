@@ -26,55 +26,50 @@ sharp but not a developer.
 
 ---
 
-## 1. Bootstrap — do this once before your first ship
+## 1. Bootstrap — verify everything before your first ship
 
-You should already have these on Papa's machine. If any are
-missing, see §1.1 for what to ask Prateek for.
-
-| What | Expected location | Test it works |
-|---|---|---|
-| Git access to repo | network reachable | `git ls-remote https://github.com/shahprateek317/lec-crm.git` returns refs |
-| Repo clone | `~/lec-crm/` (or `C:\Users\...\lec-crm\` on Windows) | `cd ~/lec-crm && git log -1` shows recent commits |
-| Node.js 20 LTS | global install | `node --version` returns v20.x |
-| SSH key to EC2 | `~/.ssh/lec-aws.pem` (chmod 600) | `ssh -i ~/.ssh/lec-aws.pem ubuntu@13.204.229.25 hostname` returns `ip-...` |
-| `.env` with secrets | `~/lec-crm/.env.local` | `grep AUTH_SECRET ~/lec-crm/.env.local` returns a line |
-| AWS credentials (for cron secret rotation / S3 ops) | `~/.aws/credentials` profile `lec` | `aws --profile lec sts get-caller-identity` returns an ARN |
-
-Then bootstrap the workspace:
+Prateek pre-staged Papa's machine using `docs/SETUP-PAPA-MACHINE.md`.
+If that ran cleanly, the seven things below already exist. Verify
+each — failures here mean Prateek's setup didn't finish; don't try
+to fix them yourself, send Papa the recovery message at the bottom
+of this section.
 
 ```bash
-cd ~/lec-crm
-git pull origin main
-npm install
-npx prisma generate
-npm test           # expect 123 passing
-bash /tmp/smoke-phase1.sh && \
-bash /tmp/smoke-phase2a.sh && \
-bash /tmp/smoke-phase2b.sh && \
-bash /tmp/smoke-phase2c.sh   # expect 56 passing
+cd ~/lec-crm                              # 1. repo present
+git status                                # 2. clean tree, on main
+node --version                            # 3. v20.x
+ssh -i ~/.ssh/lec-aws.pem ubuntu@13.204.229.25 hostname
+                                          # 4. SSH key works → "ip-..."
+grep AUTH_SECRET .env.local               # 5. secrets staged
+npm test                                  # 6. 123 passing
+bash scripts/smoke/phase1.sh && \
+bash scripts/smoke/phase2a.sh && \
+bash scripts/smoke/phase2b.sh && \
+bash scripts/smoke/phase2c.sh             # 7. 56 passing against prod
 ```
 
-If smoke is green and tests pass, you're ready to ship. Skip to §3.
+If 1–7 all pass, you're ready to ship. Skip to §3.
 
-### 1.1 If a credential is missing
+### 1.1 If something fails
 
-**Do not stop and walk Papa through setting it up** — he doesn't
-know how. Instead, send him a single message:
+Don't try to fix the setup yourself — Papa can't help and you'll
+spend hours guessing. Send Papa this message verbatim:
 
-> Papa — I'm missing the `[CREDENTIAL NAME]` to start work.
-> Could you forward this exact message to Prateek?
+> Papa — the bootstrap check failed at step `[N]` with this error:
 >
-> > "Hi — Papa's Claude needs `[CREDENTIAL]` placed at
-> > `[EXPECTED LOCATION]` to continue Phase 2d. Please transfer
-> > via 1Password / signed email / Session Manager. Don't paste
-> > into chat."
+> ```
+> [paste the exact terminal output]
+> ```
 >
-> While we wait, I'll work on whatever I can without it. If
-> nothing, I'll pause and tell you when I'm idle.
+> Please forward this exact message to Prateek and let me know
+> when he's reset the setup. While we wait, I'll work on whatever
+> I can without the broken piece. If nothing, I'll tell you I'm
+> idle.
 
-Then pick a Phase 2d item from §6 that doesn't need that
-credential (most code work doesn't need AWS / SSH until deploy
-time; pure-logic changes + tests can run entirely locally).
+Then pick a Phase 2d item from §6 that doesn't need the broken
+piece. Pure-logic changes + tests don't need SSH or deploy. UI
+work doesn't need the database. You can almost always make
+forward progress on something.
 
 ---
 
@@ -101,10 +96,14 @@ This is the rhythm. Stay in it.
 8. npm test               # full suite green (you added cases; total grows)
 9. Commit (small, focused). Use HEREDOC for the commit message.
 10. Push to main: git push origin main.
-11. Deploy: bash /tmp/deploy-to-ec2.sh   (background it; the harness
-    notifies you on completion).
-12. Smoke against prod: relevant phase script. If you added a new
-    surface, EXTEND the smoke script and re-run all 4.
+11. Deploy: bash scripts/deploy.sh   (background it; the harness
+    notifies you on completion). This SSHes to EC2, git-pulls
+    main, rebuilds the app container, tails logs. Use
+    scripts/deploy-rsync.sh instead for uncommitted-working-tree
+    iteration (needs rsync; not available in Git Bash on Windows).
+12. Smoke against prod: bash scripts/smoke/phase{1,2a,2b,2c}.sh.
+    If you added a new surface, EXTEND the relevant smoke script
+    and re-run all four.
 13. Get an independent code-review agent on the diff after deploy
     too — fresh eyes catch what you missed.
 14. TaskUpdate — mark completed. Update HANDOVER.md and this
@@ -366,9 +365,11 @@ the centre; he'll forget unless you nudge.
    Rotating it makes every encrypted value unrecoverable. Build
    a re-encrypt job FIRST if rotation is ever needed.
 
-9. **EC2 deploy script** is at `~/lec-crm/scripts/deploy-to-ec2.sh`
-   (or `/tmp/deploy-to-ec2.sh` if Prateek's machine layout). Runs
-   `git pull` then `docker compose build && up -d`. Migrations run
+9. **EC2 deploy script** is at `scripts/deploy.sh` (git-pull based,
+   runs on Windows Git Bash + Linux + macOS). For uncommitted-
+   working-tree iteration, `scripts/deploy-rsync.sh` is available
+   but needs `rsync` locally — not present on Windows Git Bash.
+   Both run `docker compose up -d --build` on EC2; migrations run
    inside the build chain. Background it with the harness — the
    notification fires on completion.
 
@@ -391,17 +392,20 @@ the centre; he'll forget unless you nudge.
 
 ## 9. Reference docs
 
-All three should be in `~/lec-crm/docs/`. If you're on Papa's
-machine they're also in `~/Documents/Papa App/`.
+All four are in `~/lec-crm/docs/`.
 
+- **`HANDOFF-FOR-NEXT-CLAUDE.md`** — this file. Read first. Update
+  it when the world changes.
 - **`HANDOVER.md`** — the full operator runbook (sections 1–18).
-  Read this for deploys, schema changes, backups, restores, EC2
+  Read for deploys, schema changes, backups, restores, EC2
   lifecycle, S3 policy.
 - **`UX_ARCHITECTURE.md`** — the long-term architecture north
-  star. Read this if you're adding a new feature to stay on the
-  established patterns.
-- **`HANDOFF-FOR-NEXT-CLAUDE.md`** — this file. Update it when
-  the world changes.
+  star. Read when adding a new feature to stay on the established
+  patterns.
+- **`SETUP-PAPA-MACHINE.md`** — Prateek's one-time setup
+  checklist. **Read this if §1 bootstrap fails** so you can tell
+  Papa exactly what step might have gone wrong when you ask him
+  to forward to Prateek.
 
 ---
 
