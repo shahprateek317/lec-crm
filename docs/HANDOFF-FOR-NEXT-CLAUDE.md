@@ -1,163 +1,143 @@
 # Handoff for the next Claude
 
-You're picking up the **Life Energy Centre CRM** mid-stream. The
-operator at the keyboard is **Papa (Subhash Shah)** — a yoga master
-and the centre's founder, **not a software engineer**. The previous
-Claude (a 1M-context Claude Opus 4.7 instance running on Papa's
-son Prateek's machine) shipped Phases 1, 2a, 2b, and 2c. The CRM is
-live in production at `https://crm.lifeenergycentre.in`.
+You are picking up the **Life Energy Centre CRM**, an active
+production system at `https://crm.lifeenergycentre.in`. Your job
+is to **autonomously continue the Phase 2d queue** in §6 —
+shipping, deploying, smoke-testing, and committing as you go. You
+do not need Papa's permission to keep working.
 
-**Default to plain language.** Don't make Papa parse stack traces or
-infer from error codes. When you need a credential or a decision,
-ask in one sentence with a concrete example of what you expect.
+The previous Claude (a 1M-context Claude Opus 4.7 instance running
+on Prateek Shah's machine) shipped Phases 1, 2a, 2b, and 2c. It
+left this handoff so you can pick up cleanly.
 
----
+**The human at your keyboard is Papa (Subhash Shah)** — a yoga
+master and the centre's founder. He is your stakeholder and
+beneficiary, not your collaborator on the code. He will:
 
-## 0. If Papa just wants to USE the CRM (no code changes)
+- chase external blockers (Meta WABA approval, Razorpay KYC, AWS
+  root MFA) — those are out of your reach
+- give you product feedback on what you've shipped
+- ask you to fix bugs or build small things he wants
 
-Tell him:
-
-> The CRM is already live at **https://crm.lifeenergycentre.in**.
-> Sign in with the admin account — email `admin@lec.app`, password
-> `demo1234` (we MUST change this password before real customers
-> start using it). You can manage staff, leads, sessions, payments,
-> WhatsApp templates, and view audit logs from there. You don't
-> need a developer for day-to-day operations.
-
-If he says "yes I just want to use it":
-1. Walk him through changing the admin password (Settings → Staff
-   accounts → click himself → reset password).
-2. Walk him through Settings → WhatsApp Business to plug in real
-   Meta credentials when his WABA approval clears.
-3. Walk him through Settings → Razorpay when his KYC clears.
-4. Then stop. You don't need to do anything else.
-
-If he says "no, I (or Prateek) want you to fix / add / change
-things" — proceed to §1.
+When you talk to him, **use plain language** — describe outcomes
+("healers can now see their monthly earnings"), not mechanism
+("added /my-earnings page with bucketed aggregation"). He is
+sharp but not a developer.
 
 ---
 
-## 1. Before you can change code, you need these from Papa
+## 1. Bootstrap — do this once before your first ship
 
-Ask for all four at once. **Don't proceed without them.** If Papa
-doesn't have them, the section below each item tells you what to
-tell him.
+You should already have these on Papa's machine. If any are
+missing, see §1.1 for what to ask Prateek for.
 
-| What | Why you need it | If Papa doesn't have it |
+| What | Expected location | Test it works |
 |---|---|---|
-| **Access to the GitHub repo `shahprateek317/lec-crm`** | To `git pull` / `git push` changes | The repo is on Prateek's GitHub. Ask Papa to message Prateek and have him add Papa as a collaborator at `https://github.com/shahprateek317/lec-crm/settings/access`. Read-only is enough if you'll deploy via SSH; write access needed if you'll push to main. |
-| **AWS SSH access to the EC2 server** | To deploy changes + read live logs + run database queries | Two options. **Preferred: AWS Session Manager** — no SSH key needed, just an AWS account with the right IAM role. Tell Papa to log in at `https://console.aws.amazon.com/`, go to EC2 → Instances → `i-05b7646efee508b07` → Connect → "Session Manager" tab. If Session Manager isn't available, you need the **SSH key file** `lec-aws.pem` (Prateek has the original). Ask Papa to ask Prateek to share via 1Password, signed email, or AWS Secrets Manager. **Never paste the key into a chat or commit it to the repo.** |
-| **The current `.env` file from `/opt/lec-crm/.env` on the EC2 server** | Contains DB credentials, AUTH_SECRET, CRON_SECRET, S3 keys, WhatsApp tokens, etc. — you cannot run anything locally without these | Once SSH is working, SCP it down: `scp -i ~/.ssh/lec-aws.pem ubuntu@13.204.229.25:/opt/lec-crm/.env ./local.env`. **Do not commit this file.** |
-| **A copy of `docs/HANDOVER.md` from the repo** | The full operator runbook. Already alongside this file in `C:\Users\shahp\OneDrive\Documents\Papa App\` if you're on that machine | Read it — sections 1–18 cover everything. |
+| Git access to repo | network reachable | `git ls-remote https://github.com/shahprateek317/lec-crm.git` returns refs |
+| Repo clone | `~/lec-crm/` (or `C:\Users\...\lec-crm\` on Windows) | `cd ~/lec-crm && git log -1` shows recent commits |
+| Node.js 20 LTS | global install | `node --version` returns v20.x |
+| SSH key to EC2 | `~/.ssh/lec-aws.pem` (chmod 600) | `ssh -i ~/.ssh/lec-aws.pem ubuntu@13.204.229.25 hostname` returns `ip-...` |
+| `.env` with secrets | `~/lec-crm/.env.local` | `grep AUTH_SECRET ~/lec-crm/.env.local` returns a line |
+| AWS credentials (for cron secret rotation / S3 ops) | `~/.aws/credentials` profile `lec` | `aws --profile lec sts get-caller-identity` returns an ARN |
 
-Once you have all four, pick a working environment from §2.
-
----
-
-## 2. Pick where you'll work
-
-### Path A: Edit directly on the EC2 server (recommended for Papa)
-
-**Easier setup, no local toolchain needed.** Papa doesn't have to
-install Node, Docker, Postgres, or Prisma on his machine.
+Then bootstrap the workspace:
 
 ```bash
-# 1. SSH in (or use AWS Session Manager — same shell either way)
-ssh -i ~/.ssh/lec-aws.pem ubuntu@13.204.229.25
-
-# 2. Code lives at /opt/lec-crm — git clone of main
-cd /opt/lec-crm
-
-# 3. Pull latest if you fell behind
+cd ~/lec-crm
 git pull origin main
-
-# 4. Make your edits (use nano/vi/code-server)
-nano src/lib/totp.ts
-
-# 5. Test locally on the server
-docker compose exec app npm test
-
-# 6. Rebuild + restart the running app
-docker compose build app && docker compose up -d app
-
-# 7. Tail logs to confirm boot
-docker compose logs -f app
-```
-
-**Downsides:** if you break something on prod, prod is broken until
-you fix it. See §5 for the rollback ritual.
-
-### Path B: Edit on Papa's local machine, deploy when ready
-
-**Safer (changes don't go live until you push)**, but requires
-toolchain setup on Papa's Windows machine.
-
-```bash
-# 1. Clone the repo (anywhere — Documents folder is fine)
-cd C:\Users\shahp\Documents
-git clone https://github.com/shahprateek317/lec-crm.git
-cd lec-crm
-
-# 2. Install Node.js 20 LTS from nodejs.org (Papa: ask if you need help)
-node --version  # should be v20.x
-
-# 3. Install dependencies (5-10 min first time)
 npm install
-
-# 4. Copy the .env you SCP'd from EC2 to .env.local
-copy ..\local.env .env.local
-
-# 5. Generate Prisma client + run dev server
 npx prisma generate
-npm run dev
-
-# Open http://localhost:3000 to see the dev copy.
-# Changes show up live (hot reload).
-
-# When ready to ship:
-git add -A
-git commit -m "what you changed"
-git push origin main
-
-# Then SSH to EC2 and run the deploy script:
-ssh -i ~/.ssh/lec-aws.pem ubuntu@13.204.229.25
-bash /tmp/deploy-to-ec2.sh
+npm test           # expect 123 passing
+bash /tmp/smoke-phase1.sh && \
+bash /tmp/smoke-phase2a.sh && \
+bash /tmp/smoke-phase2b.sh && \
+bash /tmp/smoke-phase2c.sh   # expect 56 passing
 ```
 
-**Downsides:** Papa has to install Node + Git + maybe a code editor.
-Local dev will use the LIVE database (be careful with `prisma
-migrate` — see §6 #4).
+If smoke is green and tests pass, you're ready to ship. Skip to §3.
 
-**Pick A unless Papa specifically asks for B.**
+### 1.1 If a credential is missing
+
+**Do not stop and walk Papa through setting it up** — he doesn't
+know how. Instead, send him a single message:
+
+> Papa — I'm missing the `[CREDENTIAL NAME]` to start work.
+> Could you forward this exact message to Prateek?
+>
+> > "Hi — Papa's Claude needs `[CREDENTIAL]` placed at
+> > `[EXPECTED LOCATION]` to continue Phase 2d. Please transfer
+> > via 1Password / signed email / Session Manager. Don't paste
+> > into chat."
+>
+> While we wait, I'll work on whatever I can without it. If
+> nothing, I'll pause and tell you when I'm idle.
+
+Then pick a Phase 2d item from §6 that doesn't need that
+credential (most code work doesn't need AWS / SSH until deploy
+time; pure-logic changes + tests can run entirely locally).
 
 ---
 
-## 3. Verify everything's healthy before you change anything
+## 2. The autonomous loop
 
-Whichever path you picked, run these to confirm the world hasn't
-drifted:
+This is the rhythm. Stay in it.
 
-```bash
-# Tests (123 should pass)
-npm test
-
-# Live smoke tests (56 should pass)
-bash /tmp/smoke-phase1.sh
-bash /tmp/smoke-phase2a.sh
-bash /tmp/smoke-phase2b.sh
-bash /tmp/smoke-phase2c.sh
-
-# Or copy them down once if they're not there:
-scp -i ~/.ssh/lec-aws.pem ubuntu@13.204.229.25:/tmp/smoke-phase*.sh /tmp/
+```
+1. TaskList — see what's queued; if empty, pick the top Phase 2d
+   item from §6 and create a task.
+2. TaskUpdate — mark in_progress.
+3. Read the relevant existing files. Stay on existing patterns
+   (auth model per surface, polymorphic Document, audit conventions,
+   in-memory-fake test stores).
+4. Get an independent code-review agent (subagent) on any change
+   that touches auth, security, payments, or audit logging
+   BEFORE you write a line of code — ask it for the design pitfalls
+   you should pre-empt.
+5. TDD: write the pure-logic tests against an in-memory fake
+   first. Pattern: src/lib/reconciler.test.ts, reminders.test.ts,
+   totp.test.ts.
+6. Implement until tests pass.
+7. npx tsc --noEmit       # typecheck clean
+8. npm test               # full suite green (you added cases; total grows)
+9. Commit (small, focused). Use HEREDOC for the commit message.
+10. Push to main: git push origin main.
+11. Deploy: bash /tmp/deploy-to-ec2.sh   (background it; the harness
+    notifies you on completion).
+12. Smoke against prod: relevant phase script. If you added a new
+    surface, EXTEND the smoke script and re-run all 4.
+13. Get an independent code-review agent on the diff after deploy
+    too — fresh eyes catch what you missed.
+14. TaskUpdate — mark completed. Update HANDOVER.md and this
+    HANDOFF if the world changed.
+15. Loop back to step 1.
 ```
 
-If anything fails, **stop and find out why before editing code**. A
-red baseline means you can't tell whether your change broke something
-or it was already broken.
+**Never skip steps 4 (review-before), 7 (typecheck), or 12
+(live smoke).** Each has caught a real bug in the previous Claude's
+ship cycle. Step 13 (review-after) caught a high-severity ordering
+bug in Phase 2b that would have double-sent WhatsApp messages.
+
+**Commit cadence:** one logical change per commit. If you're
+building something big, ship it in 2–4 commits with clear
+boundaries (e.g. "schema + migration", "pure lib + tests", "UI +
+server actions", "review fixes").
+
+**When you should NOT just keep going:**
+
+- A schema migration that destroys data (DROP COLUMN, TYPE change
+  losing precision). Stop, ask Papa to confirm.
+- A payment flow change. Stop, ask Papa to confirm.
+- A change to the staff sign-in critical path that could lock
+  Papa out. Verify with an agent + add a recovery path before
+  shipping.
+- A change touching the WhatsApp template approved by Meta.
+  Stop, ask Papa to re-approve with Meta.
+- You've been heads-down for 2+ hours and want feedback. Send a
+  progress check-in (§4).
 
 ---
 
-## 4. Live state snapshot (as of this handoff)
+## 3. Live state snapshot
 
 | | |
 |---|---|
@@ -165,112 +145,101 @@ or it was already broken.
 | **Vercel fallback** | `lec-crm.vercel.app` (still up; decommission once Papa's testing settles) |
 | **EC2 instance** | `i-05b7646efee508b07` (t3.small, Ubuntu 24.04, ap-south-1a) |
 | **Public IP** | `13.204.229.25` (Elastic IP, won't change) |
-| **GitHub** | `https://github.com/shahprateek317/lec-crm.git` (main branch) |
+| **GitHub** | `https://github.com/shahprateek317/lec-crm.git` (main) |
 | **Latest commit** | check `git log -1` — Phase 2c shipped most recently |
 | **Tests** | 123 passing (`npm test`) |
 | **Live smoke** | 56 passing across 4 phase scripts |
 | **Database** | Postgres 17 in Docker, single AZ, daily backups to S3 |
 | **Backups** | S3 bucket `lec-crm-backups`, 90-day retention, daily 21:00 UTC |
-| **Crons** | `crontab -l` on EC2 — 3 entries (backup, reconciler, reminder) |
+| **Crons on EC2** | `crontab -l` — 3 entries (backup, reconciler, reminder) |
 | **External blockers** | Meta WABA name approval; Razorpay KYC; AWS root MFA |
 
 ---
 
-## 5. Rollback — what to do if something breaks after deploy
+## 4. When and how to talk to Papa
 
-If the live site goes weird after a deploy, do this in order:
+**Weekly progress check-in.** Once a week (or after a meaningful
+chunk of work — 3+ commits or a full Phase 2d item), send Papa a
+2-paragraph summary:
+
+> Paragraph 1: what's new for the centre (outcomes, plain
+> language). Example: *"Healers can now see their earnings on a
+> new page. Admins can soft-delete a client; the data
+> auto-anonymises after 30 days. The site is now stricter about
+> who can sign in as admin (2-factor codes from a phone app)."*
+>
+> Paragraph 2: anything you need from him — external blockers
+> you've been waiting on, product decisions you'd like his call
+> on, or "nothing right now; I'll keep going on the queue."
+
+**Mid-work questions.** Only ask if the answer materially changes
+what you build. Example yes:
+
+> Papa — quick call: when a client refers two friends and earns
+> two free healing sessions, should those credits expire (in
+> e.g. 6 months) or stay forever? It changes the data model. I'm
+> leaning forever because that's how the centre operates today —
+> say "yes go forever" or "no, expire" and I'll proceed.
+
+Example no (just decide, don't ask):
+
+> ~~Papa — should the soft-delete confirmation say "Yes, delete"
+> or "Delete forever"?~~ ← pick one, ship it, iterate on feedback.
+
+**Reporting bugs.** Plain language with reproduction steps:
+
+> Papa — I found a bug where if a healer's profile doesn't have a
+> per-session charge set, the earnings page shows ₹0 with no
+> explanation. Fixing now. To reproduce: sign in as a healer
+> without a fee, visit `/my-earnings`. Will deploy the fix in
+> ~15 min.
+
+**Asking for external-blocker chase.** Be specific about what you
+need:
+
+> Papa — to wire real WhatsApp messages, I need three things from
+> the Meta Business Manager:
+>   1. WABA Phone Number ID (looks like `123456789012345`)
+>   2. System User access token (long string starting `EAAB...`)
+>   3. The display name "Life Energy Centre" approved (check status
+>      at Meta Business Manager → WhatsApp → Phone Numbers).
+> Can you check today / forward to Prateek to chase?
+
+---
+
+## 5. Rollback ritual — if a deploy breaks prod
 
 ```bash
-# 1. SSH in
 ssh -i ~/.ssh/lec-aws.pem ubuntu@13.204.229.25
-
-# 2. See what the last few deployed commits were
-cd /opt/lec-crm && git log -5 --oneline
-
-# 3. Revert to the previous known-good commit
-git reset --hard <previous-commit-sha>
-
-# 4. Rebuild + restart
+cd /opt/lec-crm
+git log -5 --oneline                   # find the previous good SHA
+git reset --hard <previous-sha>
 docker compose build app && docker compose up -d app
-
-# 5. Tail logs and watch for "✓ Ready"
-docker compose logs -f app
-
-# 6. Confirm with a smoke
-bash /tmp/smoke-phase1.sh
+docker compose logs -f app             # watch for "✓ Ready"
+bash /tmp/smoke-phase1.sh              # confirm green
 ```
 
-If the database is the problem (a migration that broke things),
-**also**:
+If the database is the problem (a migration that destroyed rows):
 
 ```bash
-# Restore the latest backup
 sudo bash /opt/lec-crm/scripts/restore-pg.sh --latest
 # Then re-deploy the rolled-back code
 ```
 
-If you cannot get the site healthy after 30 minutes of trying, **stop
-and tell Papa to email Prateek**. Don't keep digging — losing the
-site for two hours is much worse than admitting defeat at 30 minutes.
+**Then send Papa a short note:**
+> Papa — I deployed a change that broke X. Rolled back; site is
+> healthy. Investigating root cause. Will retry the fix once I
+> understand what went wrong.
+
+If you cannot get the site healthy in 30 minutes, **stop and tell
+Papa to ping Prateek**. Don't keep digging — 2 hours of downtime
+is much worse than admitting defeat at 30 minutes.
 
 ---
 
-## 6. Gotchas / things worth knowing
+## 6. Phase 2d queue — work this in order
 
-1. **`/me/*` server-rendered redirects via NEXT_REDIRECT template
-   marker**, not HTTP status. `curl -L` doesn't follow them. Smoke
-   tests must grep for `NEXT_REDIRECT;replace;/me/sign-in` in the
-   body. See `smoke-phase2b.sh` for the pattern.
-
-2. **`auth.config.ts` path allowlist uses exact-segment matching**.
-   `pathname === p || pathname.startsWith(p + "/")`. Adding a new
-   `/api/*` route that should bypass NextAuth needs to be added to
-   the allowlist explicitly. Don't loosen to `startsWith(p)` — it
-   accidentally widens to e.g. `/api/metrics` matching `/api/me`.
-
-3. **NextAuth `authorize()` returning `null` vs throwing**. `null`
-   is "bad credentials, generic". A thrown `CredentialsSignin`
-   subclass with a `code` property is how we signal a specific
-   error (e.g. `totp_required`). The sign-in action reads `err.code`
-   and surfaces it as `?error=...` to the page.
-
-4. **`prisma migrate dev` will WIPE your local database** if it
-   detects drift. Use `prisma migrate deploy` against the production
-   database (never `dev`). In doubt, ask before running.
-
-5. **Atomic claim before WhatsApp send** in the reminder cron. The
-   send is the side effect with external state; the claim guarantees
-   no two cron runs grab the same row. Don't reorder.
-
-6. **Document model uses polymorphic FK + CHECK constraint**.
-   `ownerUserId XOR ownerClientId` enforced in the migration SQL,
-   not in Prisma. Any Document insert must pick exactly one side.
-
-7. **Cron route auth fails closed**. If `CRON_SECRET` is unset in
-   `.env`, the routes return 500. That's intentional. Don't add a
-   fallback / default secret.
-
-8. **`AUTH_SECRET` is a critical credential**. It encrypts both
-   WhatsApp/Razorpay tokens (`settings.ts`) AND TOTP secrets
-   (`User` row). Rotating it makes every encrypted value
-   unrecoverable. When rotation is finally needed, build a
-   re-encrypt job first.
-
-9. **EC2 deploy script** is at `~/lec-crm/scripts/deploy-to-ec2.sh`
-   (or `/tmp/deploy-to-ec2.sh` if you copied it). Roughly: git pull,
-   `docker compose build app && docker compose up -d app`. Migrations
-   run automatically inside the build (`npm run build` chain).
-
-10. **Demo seed data is re-applied on every deploy**. Set
-    `SKIP_SEED=true` in `.env` when Papa goes live with real
-    customers so demo Asha Patel doesn't get re-created.
-
----
-
-## 7. The Phase 2d queue — what's worth picking up
-
-Each item is self-contained (~30 min–2 h). None block launch. Pick
-whichever matters most.
+Take the top item; if blocked, take the next.
 
 ### High value, low effort
 
@@ -281,117 +250,181 @@ whichever matters most.
      throw a new `TotpEnrollmentRequiredError` that redirects to a
      "you must enroll first" landing page.
    - Edge case: first-time ADMIN sign-in needs a grace path so they
-     can enroll. Two options: (a) generate a one-time enrollment link
-     they can use without TOTP; (b) carve out an enrollment window
-     by checking "was this user created in the last N hours". Pick (a).
+     can enroll. Two options: (a) one-time enrollment link they can
+     use without TOTP; (b) carve out a window by checking "was this
+     user created in the last N hours". Pick (a) for safety.
 
 2. **Soft-delete affordance on `/me/profile`** (~20 min)
-   - The action exists (`src/app/me/actions.ts:requestAccountDeletionAction`)
-     and the dashboard shows a basic "delete my account" disclosure.
-     Add the same affordance to `/me/profile` so healers can self-delete.
-   - Confirmation pattern: copy the typed-first-name approach from
-     `/leads/[id]` Danger zone.
+   - Action exists (`src/app/me/actions.ts:requestAccountDeletionAction`).
+     Dashboard shows it; profile page doesn't. Mirror the affordance.
+   - Confirmation: copy the typed-first-name pattern from `/leads/[id]`.
 
 3. **Tighten Phase 2c follow-ups** (~30 min total)
-   - Abandoned-enrollment TTL: nightly job clears `User.totpSecret`
-     where `totpEnabledAt IS NULL AND updatedAt < now() - 24h`.
+   - Abandoned-enrollment TTL cron: clears `User.totpSecret` where
+     `totpEnabledAt IS NULL AND updatedAt < now() - 24h`.
    - Polymorphic `AuditLog.actor`: add `actorType` + nullable
-     `actorClientId` so client-portal downloads can be audited too
-     (currently skipped — see HANDOVER §17).
-   - S3-failure retry sweep: a separate cron that finds Documents
-     with `status=FAILED` AND `storageKey` matching a real S3 object
-     and re-deletes. Today the reconciler scrubs the row even if
-     S3 delete fails, leaving orphan bytes.
+     `actorClientId`. Backfill existing rows with `actorType='User'`.
+     Then audit client-portal downloads (currently skipped).
+   - S3-failure retry sweep: new cron `reconcile-orphan-s3-keys` that
+     re-deletes Documents flagged `FAILED` whose `storageKey` still
+     resolves in S3.
 
 ### High value, medium effort
 
 4. **Backup codes for TOTP** (~1 h)
-   - Generate 10 single-use base32 codes at enrollment, AES-GCM
-     encrypted same as the secret. Display ONCE. New table
-     `UserBackupCode { id, userId, codeHash (SHA-256), usedAt? }`
-     so a code can be consumed but the plaintext never persists.
-   - Sign-in flow: TOTP step also accepts a backup code; on use,
-     mark `usedAt`. Warn at 2 codes left.
+   - Generate 10 single-use codes at enrollment, AES-GCM encrypted.
+     Display ONCE. New table `UserBackupCode { id, userId, codeHash, usedAt? }`.
+   - Sign-in TOTP step accepts a backup code too. Mark `usedAt` on
+     consumption. Warn at 2 codes left.
 
 5. **HealerPayout model** (~1.5 h)
-   - Today `/my-earnings` shows what payroll *should* pay. Track
-     actual paid-out via a `HealerPayout` table. Admin UI at
-     `/settings/payouts`; healer view in `/my-earnings` shows
-     pending vs paid alongside the computed totals.
+   - Today `/my-earnings` shows what payroll *should* pay. Add a
+     `HealerPayout` table to track actual paid-out (period, gross,
+     deductions, net, paidAt, paymentRef). Admin UI at
+     `/settings/payouts`. Healer view in `/my-earnings` shows
+     pending vs paid alongside computed totals.
 
 ### Medium value, low effort
 
 6. **Notification preferences** (~45 min)
    - Per-user opt-out for each `NotificationKind`. New model
-     `NotificationPreference { userId, kind, enabled }`. Default
-     all-on. Settings page at `/settings/notifications`.
+     `NotificationPreference { userId, kind, enabled }`. Default all-on.
+     Settings page at `/settings/notifications`.
 
 7. **Daily email digest** (~1 h)
-   - Cron at 08:00 IST that emails each staff user a summary of
-     their unread notifications. Pick a transactional email provider
-     (Resend / Postmark / AWS SES); wire to `/settings/whatsapp`-style
-     admin config so Papa can swap credentials.
+   - Cron at 02:30 UTC (08:00 IST) emails each staff user a summary
+     of their unread notifications. Wire to a transactional email
+     provider (Resend / Postmark / AWS SES); admin config pattern
+     mirrors `/settings/whatsapp`.
 
 ### Externally blocked — don't start until unblock
 
-8. **Task #7 (Razorpay credits + courses + 2-way `/me/messages`)** (large)
-   - Mock-scaffold today; live wire when KYC clears.
+8. **Razorpay credits + courses + 2-way `/me/messages`** (large)
+   - Mock-scaffold today; live wire when KYC clears. Papa is chasing.
+
+### When the queue is empty
+
+If you've shipped 1–7 and Razorpay (8) is still blocked:
+- Add Playwright smoke for client portal flows end-to-end
+- Add per-route p95 latency monitoring (Vercel-style)
+- Document the WhatsApp template catalog at `/settings/whatsapp`
+- Audit the codebase for `TODO` / `FIXME` and ship the easy ones
+
+Or just stop and tell Papa "I'm idle; what would you like next?"
 
 ---
 
-## 8. External blockers (the things Papa needs to chase, not Claude)
+## 7. External blockers — Papa chases, you wait
 
-| Blocker | Status | What unblocks it | Who can chase |
+| Blocker | Status | What unblocks | Next action |
 |---|---|---|---|
-| **Meta WABA display name approval** | Pending submission / waiting on Meta | Once approved, swap WhatsApp provider in `/settings/whatsapp` from `stub` to `meta` — stays in stub today so real customer phones don't get demo messages | Papa via Meta Business Manager |
-| **Razorpay KYC** | Pending — business verification documents required | Once approved, `/me/credits` flow can scaffold; today it's deferred. Code path exists, needs payment-link wiring | Papa via Razorpay dashboard |
-| **AWS root MFA** | Recommended but not blocking | Hardens the AWS account; doesn't affect runtime | Papa via AWS Console → IAM |
+| **Meta WABA display name approval** | Pending — submitted to Meta | Approval grants Phone Number ID + access token. Then admin pastes them at `/settings/whatsapp` and flips provider from `stub` to `meta`. | Papa periodically checks Meta Business Manager status |
+| **Razorpay KYC** | Pending — business docs uploaded | Approval grants key ID + secret. Then admin pastes at `/settings/razorpay`. Unblocks task #8 above. | Papa periodically chases Razorpay support |
+| **AWS root MFA** | Strongly recommended; not blocking | Hardens the AWS account. Doesn't affect runtime. | Papa enables when he has 5 min |
+
+Periodically (every check-in) remind Papa of these. He's busy with
+the centre; he'll forget unless you nudge.
 
 ---
 
-## 9. Reference docs you should also have
+## 8. Gotchas worth knowing
 
-All three are in `C:\Users\shahp\OneDrive\Documents\Papa App\` on
-Papa's machine, and at `/opt/lec-crm/docs/` on the EC2 server.
+1. **`/me/*` server-rendered redirects via NEXT_REDIRECT template
+   marker**, not HTTP status. `curl -L` doesn't follow them. Smoke
+   scripts grep for `NEXT_REDIRECT;replace;/me/sign-in` in the body.
+
+2. **`auth.config.ts` path allowlist uses exact-segment matching**.
+   `pathname === p || pathname.startsWith(p + "/")`. Adding a new
+   `/api/*` route that should bypass NextAuth needs to be added to
+   the allowlist explicitly. Don't loosen to `startsWith(p)` — it
+   accidentally widens to e.g. `/api/metrics` matching `/api/me`.
+
+3. **NextAuth `authorize()` `null` vs throwing**. `null` is "bad
+   credentials, generic". A thrown `CredentialsSignin` subclass
+   with a `code` property signals a specific error (e.g.
+   `totp_required`). The sign-in action reads `err.code` and
+   surfaces it as `?error=...` to the page.
+
+4. **`prisma migrate dev` will WIPE your local database** if it
+   detects drift. Always `prisma migrate deploy` against production.
+   Never `dev` against a real DB.
+
+5. **Atomic claim BEFORE WhatsApp send** in the reminder cron.
+   Reordering causes double-sends. The pattern is: `updateMany SET
+   reminderSentAt = now() WHERE id = ? AND reminderSentAt IS NULL`
+   — only proceed if `count === 1`.
+
+6. **Document model uses polymorphic FK + CHECK constraint**.
+   `ownerUserId XOR ownerClientId` enforced in migration SQL, not
+   Prisma. Any insert must pick exactly one side.
+
+7. **Cron route auth fails closed**. If `CRON_SECRET` is unset in
+   `.env`, routes return 500. Intentional. Don't add a fallback.
+
+8. **`AUTH_SECRET` is the master key**. It encrypts WhatsApp /
+   Razorpay tokens (`settings.ts`) AND TOTP secrets (`User` row).
+   Rotating it makes every encrypted value unrecoverable. Build
+   a re-encrypt job FIRST if rotation is ever needed.
+
+9. **EC2 deploy script** is at `~/lec-crm/scripts/deploy-to-ec2.sh`
+   (or `/tmp/deploy-to-ec2.sh` if Prateek's machine layout). Runs
+   `git pull` then `docker compose build && up -d`. Migrations run
+   inside the build chain. Background it with the harness — the
+   notification fires on completion.
+
+10. **Demo seed runs on every deploy** unless `SKIP_SEED=true` in
+    `.env`. When real customers are live, set the flag so demo
+    Asha Patel doesn't reappear.
+
+11. **NEXT_REDIRECT for /me/* is fine, not a leak**. The streaming
+    layout renders, the page suspends, server aborts the page
+    render with a template marker, client picks it up. Page
+    content (the data) is never serialized. Verified in the
+    Phase 2b smoke.
+
+12. **Two-step sign-in form preserves password in a hidden field**
+    across the TOTP step. This is safer than a half-session cookie
+    (no expiry / revocation surface). Don't refactor to sessions
+    unless you also build the lifecycle properly.
+
+---
+
+## 9. Reference docs
+
+All three should be in `~/lec-crm/docs/`. If you're on Papa's
+machine they're also in `~/Documents/Papa App/`.
 
 - **`HANDOVER.md`** — the full operator runbook (sections 1–18).
-  Read this if you're going to do anything serious — deploys,
-  schema changes, backups, restores, EC2 lifecycle.
+  Read this for deploys, schema changes, backups, restores, EC2
+  lifecycle, S3 policy.
 - **`UX_ARCHITECTURE.md`** — the long-term architecture north
-  star. Read this if you're adding a new feature so you stay on
-  the established patterns (auth model per surface, polymorphic
-  Document, audit-log conventions, etc.).
-- **`HANDOFF-FOR-NEXT-CLAUDE.md`** — this file. Read this first.
+  star. Read this if you're adding a new feature to stay on the
+  established patterns.
+- **`HANDOFF-FOR-NEXT-CLAUDE.md`** — this file. Update it when
+  the world changes.
 
 ---
 
-## 10. Suggested first-message-to-Papa template
+## 10. Useful skills if you have them available
 
-When Papa starts a conversation with you and you've read this
-handoff, open with something like:
+The previous Claude leaned on these. If your harness has them,
+use them — if not, the tool list at the top of your prompt is
+enough.
 
-> Hi Papa! I've read the handoff doc and I'm caught up on where
-> the CRM is. Before I can change anything, I need three things
-> from you:
->
-> 1. Do you have AWS Console access so I can SSH into the EC2
->    server? If yes, can you give me the credentials? If you don't
->    know what AWS Console is, please ask Prateek to set up "AWS
->    Session Manager" access for you — that's the easiest path.
->
-> 2. Is there a `lec-aws.pem` file on your computer anywhere? It's
->    the SSH key. If not, Prateek has it. (Don't paste it to me
->    — once you find it, just confirm you have it.)
->
-> 3. What would you like me to work on? You can:
->    - Just use the running site (already live at
->      crm.lifeenergycentre.in — no work needed from me)
->    - Have me make a specific change or fix
->    - Have me pick the next item from the Phase 2d queue
->
-> While you find those, I'll verify the live site is healthy.
-
-Then run the smoke tests in §3.
+- **Plan** subagent — for designing a multi-step change before
+  writing code. Use BEFORE touching auth / payments / audit.
+- **general-purpose** subagent — for independent code review.
+  Use BEFORE deploy on any security-relevant change, and AFTER
+  deploy as a fresh-eyes pass. Stay specific about what to
+  pressure-test; ask for "BLOCK / HIGH / MEDIUM / LOW severity
+  with file:line, what's wrong, and fix."
+- **Explore** subagent — for quick recon ("where is X defined,
+  how is Y wired").
+- **mcp__ccd_session__mark_chapter** — chapter the session so
+  Prateek can navigate transcript later.
+- **mcp__ccd_session__spawn_task** — flag genuinely out-of-scope
+  fixes you spot for separate work, instead of bloating the
+  current commit.
 
 ---
 
