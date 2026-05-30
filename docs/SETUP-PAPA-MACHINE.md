@@ -1,4 +1,15 @@
-# Setup checklist — Papa's machine
+# Setup checklist — Papa's machine (MANUAL FALLBACK)
+
+> **⚠️ This is the manual fallback. The preferred path is the
+> bundle approach:** run `bash scripts/build-papa-bundle.sh` to
+> produce a single zip with everything Papa needs, WhatsApp it
+> to him, and his Claude handles the rest autonomously. See
+> `scripts/papa-bundle/BOOTSTRAP-INSTRUCTIONS.md` for what Papa's
+> Claude reads.
+>
+> Use this manual checklist only if the bundle approach breaks
+> (Papa's machine is older than Windows 10 1809 / no `winget`,
+> aggressive antivirus, restricted corporate device, etc.).
 
 **Audience: Prateek (the human reading this).** Do this once on Papa's
 machine — sitting next to him or via a remote-desktop session.
