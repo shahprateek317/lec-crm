@@ -21,8 +21,15 @@ OUT_ZIP="${OUT_ZIP:-$HOME/papa-bundle.zip}"
 # ─── Sanity checks ────────────────────────────────────────────────────
 [ -d "$LEC_REPO" ]    || { echo "✗ Repo missing at $LEC_REPO"; exit 1; }
 [ -f "$SSH_KEY" ]     || { echo "✗ SSH key missing at $SSH_KEY"; exit 1; }
-command -v zip >/dev/null || { echo "✗ Need 'zip' command"; exit 1; }
 command -v scp >/dev/null || { echo "✗ Need 'scp' command"; exit 1; }
+# Zip step uses python3's zipfile module to avoid a sudo dependency
+# on minimal WSL/EC2 installs. Falls back to the `zip` binary if py3
+# is missing.
+HAVE_PYTHON_ZIP=$(command -v python3 >/dev/null && python3 -c 'import zipfile' 2>/dev/null && echo yes || echo no)
+HAVE_ZIP_BIN=$(command -v zip >/dev/null && echo yes || echo no)
+if [ "$HAVE_PYTHON_ZIP" = "no" ] && [ "$HAVE_ZIP_BIN" = "no" ]; then
+  echo "✗ Need either python3 + zipfile, or the 'zip' binary"; exit 1
+fi
 
 # ─── Prompt for the fine-grained PAT ──────────────────────────────────
 # We do NOT keep this PAT on disk between bundle builds. Prateek pastes
@@ -78,7 +85,20 @@ cp "$LEC_REPO/scripts/papa-bundle/bootstrap.ps1"            "$OUT_DIR/"
 # ─── Zip it up ────────────────────────────────────────────────────────
 echo "→ zipping to $OUT_ZIP"
 rm -f "$OUT_ZIP"
-( cd "$(dirname "$OUT_DIR")" && zip -r "$OUT_ZIP" "$(basename "$OUT_DIR")" >/dev/null )
+if [ "$HAVE_PYTHON_ZIP" = "yes" ]; then
+  python3 - <<PY
+import os, zipfile, pathlib
+src = pathlib.Path(r"$OUT_DIR")
+out = pathlib.Path(r"$OUT_ZIP")
+with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+    for p in src.rglob("*"):
+        if p.is_file():
+            z.write(p, src.name + "/" + str(p.relative_to(src)).replace(os.sep, "/"))
+print("zipped", out, "with", len(list(src.rglob('*'))), "entries")
+PY
+else
+  ( cd "$(dirname "$OUT_DIR")" && zip -r "$OUT_ZIP" "$(basename "$OUT_DIR")" >/dev/null )
+fi
 
 SIZE=$(du -h "$OUT_ZIP" | cut -f1)
 echo ""
