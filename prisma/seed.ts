@@ -4,8 +4,22 @@
 
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import crypto from "node:crypto";
 import type { Role } from "@prisma/client";
-import { encryptForStorage } from "../src/lib/crypto";
+
+// Inline version of encryptForStorage from src/lib/crypto.ts.
+// The seed runs via tsx in the Docker runner stage where src/ is not present,
+// so we can't import from the app source. Algorithm is identical: AES-256-GCM,
+// key = SHA-256(AUTH_SECRET), format = base64(iv||ciphertext||tag).
+function seedEncrypt(plaintext: string): string {
+  const authSecret = process.env.AUTH_SECRET ?? "";
+  const key = crypto.createHash("sha256").update(authSecret).digest();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+  const enc = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return Buffer.concat([iv, enc, tag]).toString("base64");
+}
 
 const prisma = new PrismaClient();
 
@@ -54,7 +68,7 @@ async function main() {
     const isAdmin = (s.role as string) === "ADMIN" || (s.role as string) === "SUPER_ADMIN";
     const totpData = isAdmin
       ? {
-          totpSecret: encryptForStorage(DEMO_ADMIN_TOTP_SECRET),
+          totpSecret: seedEncrypt(DEMO_ADMIN_TOTP_SECRET),
           totpEnabledAt: new Date("2026-01-01T00:00:00.000Z"),
         }
       : {};
