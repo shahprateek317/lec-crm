@@ -47,7 +47,7 @@ export default async function AdminEnrollPage({
   // ── Verify enrollment cookie ──────────────────────────────────────────
   const cookieStore = await cookies();
   const rawToken = cookieStore.get(ENROLLMENT_COOKIE)?.value ?? "";
-  const tokenResult = verifyEnrollmentToken(rawToken);
+  const tokenResult = verifyEnrollmentToken(rawToken, { consume: false });
 
   if (!tokenResult.ok) {
     // Cookie missing, expired, or tampered — bounce to sign-in.

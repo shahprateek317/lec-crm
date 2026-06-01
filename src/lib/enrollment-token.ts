@@ -43,7 +43,13 @@ export type TokenResult =
   | { ok: true; email: string }
   | { ok: false; reason: "invalid" | "expired" | "rate_limited" };
 
-export function verifyEnrollmentToken(token: string): TokenResult {
+// Pass `consume: false` for page-load verification (signature + expiry only,
+// no rate-limit increment). Pass `consume: true` for code-submission paths
+// where you want to count the attempt against the rate limit.
+export function verifyEnrollmentToken(
+  token: string,
+  { consume = false }: { consume?: boolean } = {},
+): TokenResult {
   const dotIdx = token.lastIndexOf(".");
   if (dotIdx < 1) return { ok: false, reason: "invalid" };
 
@@ -60,20 +66,23 @@ export function verifyEnrollmentToken(token: string): TokenResult {
     return { ok: false, reason: "invalid" };
   }
 
-  // Rate limit by hashed payload (not raw token, to avoid storing the secret).
-  const key = tokenHash(payload);
-  const now = Date.now();
-  let entry = attemptStore.get(key);
-  if (!entry || entry.resetAt <= now) {
-    entry = { count: 0, resetAt: now + TTL_MS };
-    attemptStore.set(key, entry);
-  }
-  entry.count += 1;
-  if (entry.count > MAX_ATTEMPTS) {
-    return { ok: false, reason: "rate_limited" };
+  // Rate limit — only on submission paths (consume: true), not on page loads.
+  if (consume) {
+    const key = tokenHash(payload);
+    const now = Date.now();
+    let entry = attemptStore.get(key);
+    if (!entry || entry.resetAt <= now) {
+      entry = { count: 0, resetAt: now + TTL_MS };
+      attemptStore.set(key, entry);
+    }
+    entry.count += 1;
+    if (entry.count > MAX_ATTEMPTS) {
+      return { ok: false, reason: "rate_limited" };
+    }
   }
 
-  // Decode and validate.
+  // Decode and validate expiry.
+  const now = Date.now();
   let email: string;
   let expiresAt: number;
   try {

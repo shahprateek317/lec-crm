@@ -42,17 +42,22 @@ describe("generateEnrollmentToken", () => {
     // the test is about format, not strict uniqueness here.
     const t2 = generateEnrollmentToken("admin@lec.app");
     // Both should be structurally valid.
-    expect(verifyEnrollmentToken(t1)).toMatchObject({ ok: true, email: "admin@lec.app" });
-    expect(verifyEnrollmentToken(t2)).toMatchObject({ ok: true, email: "admin@lec.app" });
+    expect(verifyEnrollmentToken(t1, { consume: false })).toMatchObject({ ok: true, email: "admin@lec.app" });
+    expect(verifyEnrollmentToken(t2, { consume: false })).toMatchObject({ ok: true, email: "admin@lec.app" });
   });
 });
 
 describe("verifyEnrollmentToken — happy path", () => {
-  it("returns ok:true with email for a fresh valid token", () => {
+  it("returns ok:true with email for a fresh valid token (no consume)", () => {
     const email = "super@lec.app";
     const token = generateEnrollmentToken(email);
-    const result = verifyEnrollmentToken(token);
+    const result = verifyEnrollmentToken(token, { consume: false });
     expect(result).toMatchObject({ ok: true, email });
+  });
+
+  it("returns ok:true with consume:true on first attempt", () => {
+    const token = generateEnrollmentToken("consume-happy@lec.app");
+    expect(verifyEnrollmentToken(token, { consume: true })).toMatchObject({ ok: true });
   });
 });
 
@@ -61,8 +66,7 @@ describe("verifyEnrollmentToken — rejection cases", () => {
     const token = generateEnrollmentToken("admin@lec.app");
     const [payload] = token.split(".");
     const tampered = `${payload}.invalidsignatureXXXXXXXXXXXXXXXXXXXXXXXXX`;
-    const result = verifyEnrollmentToken(tampered);
-    expect(result).toMatchObject({ ok: false, reason: "invalid" });
+    expect(verifyEnrollmentToken(tampered)).toMatchObject({ ok: false, reason: "invalid" });
   });
 
   it("rejects a token with no dot separator", () => {
@@ -74,14 +78,11 @@ describe("verifyEnrollmentToken — rejection cases", () => {
   });
 
   it("rejects an expired token", () => {
-    // Backdate the system clock so the token expires immediately.
     const realDateNow = Date.now;
     try {
-      // Generate a token, then advance time past its expiry (15 min + 1 s).
       const token = generateEnrollmentToken("admin@lec.app");
       vi.spyOn(Date, "now").mockReturnValue(realDateNow() + 16 * 60 * 1000);
-      const result = verifyEnrollmentToken(token);
-      expect(result).toMatchObject({ ok: false, reason: "expired" });
+      expect(verifyEnrollmentToken(token)).toMatchObject({ ok: false, reason: "expired" });
     } finally {
       vi.restoreAllMocks();
     }
@@ -94,15 +95,21 @@ describe("verifyEnrollmentToken — rate limiting", () => {
   // should be rate-limited. Note: tests share in-memory state across
   // vitest runs in the same process — use a unique email per test to get
   // a fresh token (and thus a fresh bucket).
-  it("allows up to 5 verifications then rate-limits", () => {
+  it("allows up to 5 consume:true calls then rate-limits", () => {
     const token = generateEnrollmentToken("ratelimit-test@lec.app");
-    // Calls 1–5 should succeed (ok:true).
     for (let i = 0; i < 5; i++) {
-      const r = verifyEnrollmentToken(token);
-      expect(r.ok).toBe(true);
+      expect(verifyEnrollmentToken(token, { consume: true }).ok).toBe(true);
     }
-    // 6th call: rate limited.
-    const r6 = verifyEnrollmentToken(token);
-    expect(r6).toMatchObject({ ok: false, reason: "rate_limited" });
+    expect(verifyEnrollmentToken(token, { consume: true })).toMatchObject({
+      ok: false,
+      reason: "rate_limited",
+    });
+  });
+
+  it("does NOT rate-limit page-load verifications (consume:false)", () => {
+    const token = generateEnrollmentToken("ratelimit-pageload@lec.app");
+    for (let i = 0; i < 10; i++) {
+      expect(verifyEnrollmentToken(token, { consume: false }).ok).toBe(true);
+    }
   });
 });

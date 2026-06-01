@@ -29,7 +29,13 @@ import {
   ENROLLMENT_COOKIE,
 } from "@/lib/enrollment-token";
 
-const codeSchema = z.string().regex(/^[\d\s]{6,10}$/);
+// Strip a single optional space ("123 456" → "123456") then require
+// exactly 6 digits. Tighter than the general codeSchema — we don't need
+// to allow arbitrary whitespace on this unauthenticated endpoint.
+const codeSchema = z
+  .string()
+  .transform((s) => s.replace(/\s/g, ""))
+  .pipe(z.string().regex(/^\d{6}$/));
 
 export async function confirmAdminEnrollmentAction(
   formData: FormData,
@@ -38,7 +44,8 @@ export async function confirmAdminEnrollmentAction(
   const cookieStore = await cookies();
   const rawToken = cookieStore.get(ENROLLMENT_COOKIE)?.value ?? "";
 
-  const tokenResult = verifyEnrollmentToken(rawToken);
+  // consume: true — counts this attempt against the rate limit.
+  const tokenResult = verifyEnrollmentToken(rawToken, { consume: true });
   if (!tokenResult.ok) {
     // Invalid, expired, or rate-limited. Bounce to sign-in.
     cookieStore.delete(ENROLLMENT_COOKIE);
