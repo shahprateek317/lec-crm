@@ -37,8 +37,18 @@ export async function signOutAllAction() {
   redirect("/me/sign-in?signed_out_all=1");
 }
 
-export async function requestAccountDeletionAction() {
+export async function requestAccountDeletionAction(
+  formData: FormData,
+): Promise<void> {
   const client = await requireClient();
+  // Require the client to type their first name to confirm. Guards against
+  // accidental taps on mobile and gives a moment of intentional friction.
+  const typed = String(formData.get("confirm") ?? "").trim();
+  const firstName = client.name.split(" ")[0] ?? "";
+  if (typed !== firstName) {
+    redirect("/me?error=confirm_mismatch");
+  }
+
   // Soft-delete: the nightly reconciler hard-deletes after a 30-day
   // grace period (DPDP defensibility + accidental-delete recovery).
   // Identity fields are NOT yet anonymised — they happen at hard-delete
