@@ -57,7 +57,7 @@ esac
 # ── Admin: audit-log viewer ─────────────────────────────────────────
 echo ""
 echo "═══ Admin: sign in + visit /settings/audit-log"
-CSRF=$(curl -ksS -c $COOKIE "$URL/api/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["csrfToken"])')
+CSRF=$(curl -ksS -c $COOKIE "$URL/api/auth/csrf" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>process.stdout.write(JSON.parse(d).csrfToken))')
 curl -ksS -b $COOKIE -c $COOKIE -X POST "$URL/api/auth/callback/credentials" \
   --data-urlencode 'email=admin@lec.app' --data-urlencode 'password=demo1234' \
   --data-urlencode "csrfToken=$CSRF" --data-urlencode 'callbackUrl=/' \
@@ -81,7 +81,7 @@ assert_contains /tmp/dash.html 'aria-label="Notifications'
 echo ""
 echo "═══ Non-admin: /settings/audit-log redirects coordinator away"
 rm -f $COOKIE
-CSRF=$(curl -ksS -c $COOKIE "$URL/api/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["csrfToken"])')
+CSRF=$(curl -ksS -c $COOKIE "$URL/api/auth/csrf" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>process.stdout.write(JSON.parse(d).csrfToken))')
 curl -ksS -b $COOKIE -c $COOKIE -X POST "$URL/api/auth/callback/credentials" \
   --data-urlencode 'email=coordinator@lec.app' --data-urlencode 'password=demo1234' \
   --data-urlencode "csrfToken=$CSRF" --data-urlencode 'callbackUrl=/' \

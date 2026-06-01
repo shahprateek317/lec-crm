@@ -24,7 +24,7 @@ esac
 
 echo ""
 echo "═══ Healer sign-in + /my-earnings"
-CSRF=$(curl -ksS -c $COOKIE "$URL/api/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["csrfToken"])')
+CSRF=$(curl -ksS -c $COOKIE "$URL/api/auth/csrf" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>process.stdout.write(JSON.parse(d).csrfToken))')
 curl -ksS -b $COOKIE -c $COOKIE -X POST "$URL/api/auth/callback/credentials" \
   --data-urlencode 'email=healer@lec.app' --data-urlencode 'password=demo1234' \
   --data-urlencode "csrfToken=$CSRF" --data-urlencode 'callbackUrl=/' \
@@ -37,7 +37,7 @@ if grep -qF "This month" /tmp/earn.html; then echo "    ✓ contains 'This month
 echo ""
 echo "═══ Coordinator denied /my-earnings"
 rm -f $COOKIE
-CSRF=$(curl -ksS -c $COOKIE "$URL/api/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["csrfToken"])')
+CSRF=$(curl -ksS -c $COOKIE "$URL/api/auth/csrf" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>process.stdout.write(JSON.parse(d).csrfToken))')
 curl -ksS -b $COOKIE -c $COOKIE -X POST "$URL/api/auth/callback/credentials" \
   --data-urlencode 'email=coordinator@lec.app' --data-urlencode 'password=demo1234' \
   --data-urlencode "csrfToken=$CSRF" --data-urlencode 'callbackUrl=/' \

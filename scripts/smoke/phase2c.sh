@@ -11,7 +11,7 @@ FAIL=0
 echo ""
 echo "═══ /settings/security accessible to any signed-in staff"
 # Sign in as healer (non-admin) and visit the security page.
-CSRF=$(curl -ksS -c $COOKIE "$URL/api/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["csrfToken"])')
+CSRF=$(curl -ksS -c $COOKIE "$URL/api/auth/csrf" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>process.stdout.write(JSON.parse(d).csrfToken))')
 curl -ksS -b $COOKIE -c $COOKIE -X POST "$URL/api/auth/callback/credentials" \
   --data-urlencode 'email=healer@lec.app' --data-urlencode 'password=demo1234' \
   --data-urlencode "csrfToken=$CSRF" --data-urlencode 'callbackUrl=/' \
@@ -44,7 +44,7 @@ if grep -qF "didn" /tmp/si3.html; then echo "    ✓ wrong-code message shown"; 
 echo ""
 echo "═══ Admin /leads/[id] shows Danger zone (soft-delete UI)"
 rm -f $COOKIE
-CSRF=$(curl -ksS -c $COOKIE "$URL/api/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["csrfToken"])')
+CSRF=$(curl -ksS -c $COOKIE "$URL/api/auth/csrf" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>process.stdout.write(JSON.parse(d).csrfToken))')
 curl -ksS -b $COOKIE -c $COOKIE -X POST "$URL/api/auth/callback/credentials" \
   --data-urlencode 'email=admin@lec.app' --data-urlencode 'password=demo1234' \
   --data-urlencode "csrfToken=$CSRF" --data-urlencode 'callbackUrl=/' \
@@ -67,7 +67,7 @@ echo ""
 echo "═══ Coordinator /leads/[id] hides Danger zone"
 if [ -n "$client_id" ]; then
   rm -f $COOKIE
-  CSRF=$(curl -ksS -c $COOKIE "$URL/api/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["csrfToken"])')
+  CSRF=$(curl -ksS -c $COOKIE "$URL/api/auth/csrf" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>process.stdout.write(JSON.parse(d).csrfToken))')
   curl -ksS -b $COOKIE -c $COOKIE -X POST "$URL/api/auth/callback/credentials" \
     --data-urlencode 'email=coordinator@lec.app' --data-urlencode 'password=demo1234' \
     --data-urlencode "csrfToken=$CSRF" --data-urlencode 'callbackUrl=/' \
@@ -80,7 +80,7 @@ fi
 echo ""
 echo "═══ Security tile present on /settings (admin view)"
 rm -f $COOKIE
-CSRF=$(curl -ksS -c $COOKIE "$URL/api/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["csrfToken"])')
+CSRF=$(curl -ksS -c $COOKIE "$URL/api/auth/csrf" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>process.stdout.write(JSON.parse(d).csrfToken))')
 curl -ksS -b $COOKIE -c $COOKIE -X POST "$URL/api/auth/callback/credentials" \
   --data-urlencode 'email=admin@lec.app' --data-urlencode 'password=demo1234' \
   --data-urlencode "csrfToken=$CSRF" --data-urlencode 'callbackUrl=/' \
