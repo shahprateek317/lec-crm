@@ -5,16 +5,14 @@
 // owner === session.client.id. Same outcome (302 → presigned S3 GET)
 // but a clean separation of the two auth models.
 //
-// Audit log: AuditLog.actor is a User FK so we can't write a client-
-// initiated read with the current schema. Phase 2c will polymorphize
-// the actor column. Until then, client portal downloads aren't in the
-// audit-log surface — acceptable because the data subject IS the
-// person initiating the read.
+// Audit log: uses the polymorphic actorType="Client" path introduced in
+// Phase 2d item 3b so client-initiated downloads are now tracked.
 
 import { NextResponse } from "next/server";
 import { requireClient } from "@/lib/me-session";
 import { prisma } from "@/lib/prisma";
 import { getDownloadUrl } from "@/lib/uploads";
+import { audit } from "@/lib/audit";
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const client = await requireClient(`/me/documents`);
@@ -34,8 +32,13 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     return NextResponse.json({ error: "upload_incomplete" }, { status: 409 });
   }
 
-  // actorId is intentionally empty — getDownloadUrl will skip the
-  // audit write since the AuditLog.actor FK requires a User row.
+  // Write audit log before redirecting — client actors now supported
+  // via the polymorphic actorType column added in Phase 2d item 3b.
+  await audit("DOCUMENT_DOWNLOADED", "Document", documentId, {
+    actorType:     "Client",
+    actorClientId: client.id,
+  });
+
   const url = await getDownloadUrl(documentId, { actorId: "" });
   if (!url.ok) {
     return NextResponse.json({ error: url.error }, { status: 500 });

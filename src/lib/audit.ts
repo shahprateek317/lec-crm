@@ -31,14 +31,22 @@ export type AuditMeta = Prisma.InputJsonValue;
  *    because access without a tracked actor is the exact insider-risk
  *    we're guarding against.
  */
+export type AuditOpts = {
+  actorId?: string;
+  actorType?: "User" | "Client" | "System";
+  actorClientId?: string;
+  meta?: AuditMeta;
+};
+
 export async function audit(
   action: AuditAction,
   targetType: string,
   targetId: string,
-  opts: { actorId?: string; meta?: AuditMeta } = {},
+  opts: AuditOpts = {},
 ): Promise<void> {
   try {
     let actorId = opts.actorId;
+    const actorType = opts.actorType ?? "User";
     let ip: string | undefined;
     try {
       const h = await headers();
@@ -49,7 +57,10 @@ export async function audit(
     } catch {
       // headers() throws outside a request scope — fine for background jobs.
     }
-    if (!actorId) {
+
+    // For Client and System actors the User actorId is optional.
+    // For User actors, fall back to the NextAuth session.
+    if (!actorId && actorType === "User") {
       // Lazy import to avoid pulling next-auth into Edge bundles via this file.
       const { auth } = await import("@/lib/auth");
       try {
@@ -59,19 +70,22 @@ export async function audit(
         console.warn("[audit] session resolution failed", { action, targetType, targetId }, err);
       }
     }
-    if (!actorId) {
+
+    if (!actorId && actorType === "User") {
       console.warn("[audit] skipping write — no actor resolved", { action, targetType, targetId });
       return;
     }
 
     await prisma.auditLog.create({
       data: {
-        actorId,
+        actorId:       actorId ?? undefined,
+        actorType,
+        actorClientId: opts.actorClientId ?? null,
         action,
         targetType,
         targetId,
-        ip: ip ?? null,
-        meta: opts.meta,
+        ip:            ip ?? null,
+        meta:          opts.meta,
       },
     });
   } catch (err) {

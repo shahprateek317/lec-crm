@@ -115,7 +115,8 @@ export default async function AuditLogPage({
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
       include: {
-        actor: { select: { id: true, name: true, role: true } },
+        actor:       { select: { id: true, name: true, role: true } },
+        actorClient: { select: { id: true, name: true } },
       },
     }),
     prisma.auditLog.count({ where }),
@@ -267,8 +268,12 @@ export default async function AuditLogPage({
                       {formatDistanceToNow(e.at, { addSuffix: true })}
                     </td>
                     <td className="px-2 py-2 align-top">
-                      <div className="text-sm font-medium text-foreground">{e.actor.name}</div>
-                      <div className="text-[11px] text-muted-foreground">{e.actor.role}</div>
+                      <div className="text-sm font-medium text-foreground">
+                        {e.actor?.name ?? e.actorClient?.name ?? e.actorType}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {e.actor?.role ?? e.actorType}
+                      </div>
                     </td>
                     <td className="px-2 py-2 align-top">
                       <span className="inline-flex rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground">

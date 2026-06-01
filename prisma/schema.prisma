@@ -463,6 +463,7 @@ model Client {
   referralRewardsAsReferee ReferralReward[]     @relation("ReferralRewardsAsReferee")
   // Phase 1a additions — back-relations.
   documents                Document[]           @relation("ClientDocuments")
+  auditLogEntries          AuditLog[]           @relation("AuditLogClientActor")
   whatsappThread           WhatsAppThread?
   magicLinks               ClientMagicLink[]
   portalSessions           ClientSession[]
@@ -1168,17 +1169,23 @@ enum AuditAction {
 }
 
 model AuditLog {
-  id         String      @id @default(cuid())
-  actorId    String
-  actor      User        @relation("AuditLogActor", fields: [actorId], references: [id])
-  action     AuditAction
-  targetType String // "Client" | "Document" | "HealingSession" | "User" | ...
-  targetId   String
-  meta       Json? // additional context (download UA, prev/next values, etc.)
-  ip         String?
-  at         DateTime    @default(now())
+  id            String      @id @default(cuid())
+  // actorId is nullable to support Client and System actors that have no User row.
+  // actorType distinguishes the three cases: "User" (default), "Client", "System".
+  actorId       String?
+  actor         User?       @relation("AuditLogActor", fields: [actorId], references: [id])
+  actorType     String      @default("User") // "User" | "Client" | "System"
+  actorClientId String?
+  actorClient   Client?     @relation("AuditLogClientActor", fields: [actorClientId], references: [id], onDelete: SetNull)
+  action        AuditAction
+  targetType    String // "Client" | "Document" | "HealingSession" | "User" | ...
+  targetId      String
+  meta          Json? // additional context (download UA, prev/next values, etc.)
+  ip            String?
+  at            DateTime    @default(now())
 
   @@index([actorId, at])
+  @@index([actorClientId, at])
   @@index([targetType, targetId, at])
   @@index([action, at])
 }
