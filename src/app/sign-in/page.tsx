@@ -28,7 +28,7 @@ const DEMO_ROLES = [
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; callbackUrl?: string; email?: string }>;
+  searchParams: Promise<{ error?: string; callbackUrl?: string; email?: string; enrolled?: string }>;
 }) {
   const sp = await searchParams;
   const isDemo = env.WHATSAPP_PROVIDER === "stub" && env.RAZORPAY_PROVIDER === "stub";
@@ -154,6 +154,12 @@ export default async function SignInPage({
                 className="flex h-12 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-center font-mono text-lg tracking-widest outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
             </div>
+          )}
+
+          {sp.enrolled === "1" && (
+            <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700 border border-emerald-200">
+              Two-factor authentication is now active. Please sign in.
+            </p>
           )}
 
           {sp.error === "invalid" && (

@@ -21,6 +21,12 @@ class TotpRequiredError extends CredentialsSignin {
 class TotpInvalidError extends CredentialsSignin {
   code = "totp_invalid";
 }
+// Thrown when an ADMIN/SUPER_ADMIN has not yet enrolled in TOTP.
+// The sign-in action catches this and redirects to /admin-enroll via
+// a short-lived HttpOnly cookie (not URL param — avoids browser history).
+class TotpEnrollmentRequiredError extends CredentialsSignin {
+  code = "totp_enrollment_required";
+}
 
 declare module "next-auth" {
   interface Session {
@@ -70,11 +76,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const passwordOk = await bcrypt.compare(parsed.data.password, user.passwordHash);
         if (!passwordOk) return null;
 
+        // ── Admin TOTP enrollment enforcement ──
+        // ADMIN and SUPER_ADMIN must have TOTP active before getting a
+        // session. If their totpEnabledAt is null (either never enrolled or
+        // enrollment abandoned), block sign-in and redirect them to the
+        // enrollment grace page. This check runs even when totpSecret is
+        // already set (enrollment-in-progress) — we never grant a session
+        // to an admin without a confirmed second factor.
+        if (user.role === "ADMIN" || user.role === "SUPER_ADMIN") {
+          if (!user.totpEnabledAt) {
+            throw new TotpEnrollmentRequiredError();
+          }
+        }
+
         // ── TOTP gate ──
         // Only enforced after the user has VERIFIED their first code
-        // (`totpEnabledAt` is set). The enrollment-in-progress state
-        // (secret set, enabledAt null) does NOT block sign-in — the
-        // user needs to be able to log in to finish enrolling.
+        // (`totpEnabledAt` is set). For non-admin roles, enrollment is
+        // still opt-in; for admin roles the enforcement above ensures we
+        // never reach here without totpEnabledAt being set.
         if (user.totpEnabledAt && user.totpSecret) {
           const submitted = (parsed.data.totpCode ?? "").trim();
           if (!submitted) {
