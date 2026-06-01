@@ -56,10 +56,34 @@ esac
 
 # ── Admin: audit-log viewer ─────────────────────────────────────────
 echo ""
-echo "═══ Admin: sign in + visit /settings/audit-log"
+echo "═══ Admin: sign in (with TOTP) + visit /settings/audit-log"
+# The demo admin is pre-enrolled with a fixed secret. Generate the current
+# 6-digit code using Node's built-in crypto (no external deps).
+DEMO_TOTP_SECRET="LECCRMADMINDEMOSEC"
+TOTP_CODE=$(node -e "
+const crypto = require('crypto');
+const s = '$DEMO_TOTP_SECRET';
+const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+let bits = 0, val = 0, bytes = [];
+for (const c of s.toUpperCase()) {
+  const idx = chars.indexOf(c);
+  if (idx < 0) continue;
+  val = (val << 5) | idx; bits += 5;
+  if (bits >= 8) { bytes.push((val >>> (bits - 8)) & 255); bits -= 8; }
+}
+const key = Buffer.from(bytes);
+const counter = Math.floor(Date.now() / 1000 / 30);
+const buf = Buffer.alloc(8);
+buf.writeBigInt64BE(BigInt(counter));
+const hmac = crypto.createHmac('sha1', key).update(buf).digest();
+const off = hmac[hmac.length - 1] & 0xf;
+const code = ((hmac[off] & 0x7f) << 24 | hmac[off+1] << 16 | hmac[off+2] << 8 | hmac[off+3]) % 1000000;
+process.stdout.write(String(code).padStart(6,'0'));
+")
 CSRF=$(curl -ksS -c $COOKIE "$URL/api/auth/csrf" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>process.stdout.write(JSON.parse(d).csrfToken))')
 curl -ksS -b $COOKIE -c $COOKIE -X POST "$URL/api/auth/callback/credentials" \
   --data-urlencode 'email=admin@lec.app' --data-urlencode 'password=demo1234' \
+  --data-urlencode "totpCode=$TOTP_CODE" \
   --data-urlencode "csrfToken=$CSRF" --data-urlencode 'callbackUrl=/' \
   --data-urlencode 'json=true' -o /dev/null -w "    admin signin status=%{http_code}\n"
 

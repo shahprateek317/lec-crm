@@ -5,6 +5,7 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import type { Role } from "@prisma/client";
+import { encryptForStorage } from "../src/lib/crypto";
 
 const prisma = new PrismaClient();
 
@@ -40,12 +41,27 @@ async function main() {
     { email: "healer@lec.app",      name: "Healer",             role: "HEALER",             password: "demo1234" },
     { email: "quality@lec.app",     name: "Quality Controller", role: "QUALITY_CONTROLLER", password: "demo1234" },
   ];
+  // Fixed TOTP secret used by the demo admin account (admin@lec.app).
+  // Smoke scripts generate the live code from this secret with Node crypto
+  // so they can sign in as admin without a real phone.
+  // NEVER use this secret in production — it is committed to the repo.
+  const DEMO_ADMIN_TOTP_SECRET = "LECCRMADMINDEMOSEC";
+
   for (const s of staff) {
     const passwordHash = await bcrypt.hash(s.password, 10);
+    // Pre-enroll TOTP for admin roles so the TOTP enforcement gate doesn't
+    // block demo sign-in. The smoke tests generate codes from DEMO_ADMIN_TOTP_SECRET.
+    const isAdmin = (s.role as string) === "ADMIN" || (s.role as string) === "SUPER_ADMIN";
+    const totpData = isAdmin
+      ? {
+          totpSecret: encryptForStorage(DEMO_ADMIN_TOTP_SECRET),
+          totpEnabledAt: new Date("2026-01-01T00:00:00.000Z"),
+        }
+      : {};
     const u = await prisma.user.upsert({
       where: { email: s.email },
-      update: { name: s.name, role: s.role, active: true },
-      create: { email: s.email, name: s.name, role: s.role, active: true, passwordHash },
+      update: { name: s.name, role: s.role, active: true, ...totpData },
+      create: { email: s.email, name: s.name, role: s.role, active: true, passwordHash, ...totpData },
     });
     await ensureCode(u.id, u.role);
   }
