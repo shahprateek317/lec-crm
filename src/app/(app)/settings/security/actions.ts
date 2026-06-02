@@ -29,6 +29,7 @@ import { prisma } from "@/lib/prisma";
 import { encryptForStorage, decryptFromStorage } from "@/lib/crypto";
 import { generateTotpSecret, verifyTotpCode } from "@/lib/totp";
 import { audit } from "@/lib/audit";
+import { generateAndStoreBackupCodes } from "@/lib/backup-codes";
 
 async function requireUser() {
   const session = await auth();
@@ -106,12 +107,17 @@ export async function confirmTotpEnrollmentAction(formData: FormData): Promise<v
     where: { id: user.id },
     data: { totpEnabledAt: new Date() },
   });
+  // Generate 10 single-use backup codes. The codes are returned as plaintext
+  // and included in the redirect URL as a base64-encoded query param so the
+  // page can display them ONCE. They are not stored anywhere in plaintext.
+  const plainCodes = await generateAndStoreBackupCodes(user.id);
   await audit("SETTING_CHANGED", "User", user.id, {
     actorId: user.id,
     meta: { setting: "totp", action: "enabled" },
   });
   revalidatePath("/settings/security");
-  redirect("/settings/security?ok=enabled");
+  const codesParam = Buffer.from(JSON.stringify(plainCodes)).toString("base64url");
+  redirect(`/settings/security?ok=enabled&codes=${codesParam}`);
 }
 
 export async function cancelTotpEnrollmentAction(): Promise<void> {

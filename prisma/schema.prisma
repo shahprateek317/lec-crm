@@ -150,6 +150,7 @@ model User {
   qualityNotesAuthored QualityNote[]    @relation("QualityNoteAuthor")
   notifications        Notification[]
   auditLogEntries      AuditLog[]       @relation("AuditLogActor")
+  backupCodes          UserBackupCode[]
   threadAssignments    WhatsAppThread[] @relation("ThreadAssignee")
   threadResolutions    WhatsAppThread[] @relation("ThreadResolver")
 
@@ -1146,6 +1147,24 @@ model Notification {
 
   @@index([recipientId, readAt])
   @@index([recipientId, createdAt])
+}
+
+// ── TOTP backup codes ─────────────────────────────────────────────────────
+// Generated at enrollment: 10 single-use codes stored as SHA-256 hashes.
+// Plaintext displayed ONCE (at generation time) and never stored.
+// Sign-in accepts a backup code in place of a TOTP code — usedAt is set
+// on first use, making the code invalid for future attempts.
+// A counter at 2 remaining unused codes triggers a warning in the UI.
+
+model UserBackupCode {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String    // SHA-256(plaintext) — never store plaintext
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, usedAt])
 }
 
 // ── Audit log (DPDP / insider-risk) ──────────────────────────────────────

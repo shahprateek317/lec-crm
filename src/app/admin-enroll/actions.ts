@@ -24,6 +24,7 @@ import { prisma } from "@/lib/prisma";
 import { decryptFromStorage } from "@/lib/crypto";
 import { verifyTotpCode } from "@/lib/totp";
 import { audit } from "@/lib/audit";
+import { generateAndStoreBackupCodes } from "@/lib/backup-codes";
 import {
   verifyEnrollmentToken,
   ENROLLMENT_COOKIE,
@@ -100,10 +101,15 @@ export async function confirmAdminEnrollmentAction(
   });
 
   if (count === 1) {
+    const plainCodes = await generateAndStoreBackupCodes(user.id);
     await audit("SETTING_CHANGED", "User", user.id, {
       actorId: user.id,
       meta: { setting: "totp", action: "admin_enrollment_completed" },
     });
+    // Pass backup codes to sign-in page for one-time display.
+    const codesParam = Buffer.from(JSON.stringify(plainCodes)).toString("base64url");
+    cookieStore.delete(ENROLLMENT_COOKIE);
+    redirect(`/sign-in?enrolled=1&codes=${codesParam}`);
   }
 
   // ── 5. Clear cookie and redirect to sign-in ───────────────────────────

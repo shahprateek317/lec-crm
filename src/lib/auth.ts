@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { authConfig } from "@/lib/auth.config";
 import { decryptFromStorage } from "@/lib/crypto";
 import { verifyTotpCode } from "@/lib/totp";
+import { consumeBackupCode } from "@/lib/backup-codes";
 import type { Role } from "@prisma/client";
 
 // ── TOTP signalling errors ────────────────────────────────────────────
@@ -110,8 +111,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             console.error("[auth] could not decrypt totpSecret for user", user.id);
             throw new TotpInvalidError();
           }
-          if (!verifyTotpCode(secret, submitted)) {
-            throw new TotpInvalidError();
+          // Accept either a TOTP code (6-digit rotating) or a backup code
+          // (xxxxx-xxxxx single-use). Try TOTP first; fall back to backup.
+          const totpValid = verifyTotpCode(secret, submitted);
+          if (!totpValid) {
+            // Might be a backup code — try consuming it.
+            const backupValid = await consumeBackupCode(user.id, submitted);
+            if (!backupValid) {
+              throw new TotpInvalidError();
+            }
+            // Backup code consumed; proceed to grant the session.
           }
         }
 
