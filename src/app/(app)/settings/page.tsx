@@ -29,6 +29,7 @@ export default async function SettingsPage() {
       status: waLive ? { label: "Live", tone: "bg-emerald-100 text-emerald-900" } : { label: "Demo mode", tone: "bg-amber-100 text-amber-900" } },
     { href: "/settings/razorpay", icon: Wallet,        title: "Razorpay",         description: "Connect your Razorpay account so real payment links go out.",
       status: razLive ? { label: "Live", tone: "bg-emerald-100 text-emerald-900" } : { label: "Demo mode", tone: "bg-amber-100 text-amber-900" } },
+    { href: "/settings/payouts",   icon: Wallet,        title: "Healer payouts",   description: "Record monthly disbursements to healers. Track pending vs paid per period." },
     { href: "/settings/audit-log", icon: ClipboardList, title: "Audit log",        description: "Who accessed what, and when. Append-only record of document views, thread opens, and admin actions." },
     { href: "/settings/security",  icon: Shield,        title: "Two-factor auth",  description: "Enable a 6-digit code from your authenticator app on top of your password." },
   ] as const;

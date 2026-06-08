@@ -158,6 +158,9 @@ model User {
   counsellorProfile  CounsellorProfile?
   coordinatorProfile CoordinatorProfile?
   adminProfile       AdminProfile?
+
+  healerPayouts      HealerPayout[] @relation("HealerPayouts")
+  payoutsCreated     HealerPayout[] @relation("PayoutsCreated")
 }
 
 // ── Role-specific profiles ───────────────────────────────────────────────
@@ -217,6 +220,32 @@ model HealerProfile {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ── Healer payouts ───────────────────────────────────────────────────────────
+// Records actual cash disbursements to healers. `gross` is an immutable
+// snapshot of computed earnings at the time of recording — changing a
+// healer's fee profile later does NOT alter historical payouts.
+// `period` is "YYYY-MM" (e.g. "2026-06"). One payout per healer per period.
+
+model HealerPayout {
+  id         String   @id @default(cuid())
+  healerId   String
+  healer     User     @relation("HealerPayouts", fields: [healerId], references: [id], onDelete: Cascade)
+  createdById String
+  createdBy   User    @relation("PayoutsCreated", fields: [createdById], references: [id])
+
+  period     String   // "YYYY-MM"
+  gross      Int      // earnings snapshot (₹)
+  deductions Int      @default(0)
+  net        Int      // gross - deductions, enforced in server action
+  paidAt     DateTime
+  paymentRef String?
+  notes      String?
+
+  createdAt  DateTime @default(now())
+
+  @@unique([healerId, period])
 }
 
 model CounsellorProfile {
@@ -1185,6 +1214,8 @@ enum AuditAction {
   USER_ROLE_CHANGED
   SETTING_CHANGED
   CERT_VERIFIED
+  PAYOUT_RECORDED
+  PAYOUT_DELETED
 }
 
 model AuditLog {

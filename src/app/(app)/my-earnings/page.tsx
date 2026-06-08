@@ -21,6 +21,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { bucketEarnings, computeSessionEarning, type EarningsProfile } from "@/lib/earnings";
+import { computePendingPeriods, periodLabel } from "@/lib/payout";
+import { CheckCircle2, Clock } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "My earnings · LEC CRM" };
@@ -36,7 +38,7 @@ export default async function MyEarningsPage() {
   if (!session?.user) redirect("/sign-in?callbackUrl=/my-earnings");
   if (!HEALER_ROLES.has(session.user.role)) redirect("/dashboard");
 
-  const [profile, sessions] = await Promise.all([
+  const [profile, sessions, payouts] = await Promise.all([
     prisma.healerProfile.findUnique({
       where: { userId: session.user.id },
       select: {
@@ -58,6 +60,11 @@ export default async function MyEarningsPage() {
         client: { select: { name: true } },
       },
     }),
+    prisma.healerPayout.findMany({
+      where: { healerId: session.user.id },
+      orderBy: { period: "desc" },
+      select: { id: true, period: true, gross: true, deductions: true, net: true, paidAt: true, paymentRef: true },
+    }),
   ]);
 
   // If the profile isn't configured we can still render — buckets will
@@ -69,6 +76,7 @@ export default async function MyEarningsPage() {
   };
 
   const buckets = bucketEarnings(earningsProfile, sessions);
+  const pendingPeriods = computePendingPeriods(earningsProfile, sessions, payouts);
 
   const profileConfigured =
     (earningsProfile.perSessionCharge ?? 0) > 0 &&
@@ -121,6 +129,46 @@ export default async function MyEarningsPage() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <BucketCard label="Last year" value={buckets.lastYear} />
         </div>
+      )}
+
+      {/* Payout status */}
+      {(payouts.length > 0 || pendingPeriods.length > 0) && (
+        <Card className="rounded-xl">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium">
+              <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
+              Payout status
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 px-4 pb-4">
+            {pendingPeriods.map((p) => (
+              <div key={p.period} className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-sm">
+                <span className="flex items-center gap-2 text-amber-900">
+                  <Clock className="h-3.5 w-3.5" />
+                  {p.label} — pending payment
+                </span>
+                <span className="font-medium tabular-nums text-amber-900">
+                  {inr(p.pending)}
+                  {p.paid > 0 && <span className="ml-1 text-xs font-normal text-amber-700">({inr(p.paid)} paid)</span>}
+                </span>
+              </div>
+            ))}
+            {payouts.map((p) => {
+              const isPending = pendingPeriods.some((pp) => pp.period === p.period);
+              if (isPending) return null; // already shown above
+              return (
+                <div key={p.id} className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2 text-sm">
+                  <span className="flex items-center gap-2 text-emerald-900">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    {periodLabel(p.period)} — paid
+                    {p.paymentRef && <span className="text-xs text-emerald-700">· ref: {p.paymentRef}</span>}
+                  </span>
+                  <span className="font-medium tabular-nums text-emerald-900">{inr(p.net)}</span>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
       )}
 
       {/* Per-session breakdown */}

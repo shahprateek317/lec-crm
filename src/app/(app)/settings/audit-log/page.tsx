@@ -44,6 +44,8 @@ const ALL_ACTIONS: AuditAction[] = [
   "USER_ROLE_CHANGED",
   "SETTING_CHANGED",
   "CERT_VERIFIED",
+  "PAYOUT_RECORDED",
+  "PAYOUT_DELETED",
 ];
 
 // Friendlier labels (matches the enum values 1:1 — show readable names).
@@ -61,6 +63,8 @@ const ACTION_LABEL: Record<AuditAction, string> = {
   USER_ROLE_CHANGED:      "User role changed",
   SETTING_CHANGED:        "Setting changed",
   CERT_VERIFIED:          "Certification verified",
+  PAYOUT_RECORDED:        "Payout recorded",
+  PAYOUT_DELETED:         "Payout deleted",
 };
 
 type SearchParams = {
