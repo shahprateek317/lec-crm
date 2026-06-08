@@ -13,6 +13,55 @@
 import { prisma } from "@/lib/prisma";
 import type { NotificationKind } from "@prisma/client";
 
+// ── Preference helpers ───────────────────────────────────────────────────────
+
+/**
+ * Returns true if the user has NOT disabled this notification kind.
+ * Absence of a preference row = enabled (default-on).
+ */
+export async function isKindEnabled(
+  userId: string,
+  kind: NotificationKind,
+): Promise<boolean> {
+  const rows = await prisma.notificationPreference.findMany({
+    where: { userId },
+  });
+  const row = rows.find((r) => r.kind === kind);
+  return row ? row.enabled : true;
+}
+
+/**
+ * Persist a map of kind→enabled for a user.
+ * Rows for enabled=true are deleted (restore default); rows for enabled=false
+ * are upserted so the gate can find them quickly.
+ */
+export async function savePreferences(
+  userId: string,
+  prefs: Partial<Record<NotificationKind, boolean>>,
+): Promise<void> {
+  const toDisable = (Object.entries(prefs) as [NotificationKind, boolean][])
+    .filter(([, v]) => !v)
+    .map(([k]) => k);
+  const toEnable = (Object.entries(prefs) as [NotificationKind, boolean][])
+    .filter(([, v]) => v)
+    .map(([k]) => k);
+
+  await Promise.all([
+    ...toDisable.map((kind) =>
+      prisma.notificationPreference.upsert({
+        where: { userId_kind: { userId, kind } },
+        update: { enabled: false },
+        create: { userId, kind, enabled: false },
+      }),
+    ),
+    toEnable.length > 0
+      ? prisma.notificationPreference.deleteMany({
+          where: { userId, kind: { in: toEnable } },
+        })
+      : Promise.resolve(),
+  ]);
+}
+
 export type NotifyOpts = {
   recipientId: string;
   kind: NotificationKind;
@@ -23,6 +72,11 @@ export type NotifyOpts = {
 
 export async function notify(opts: NotifyOpts): Promise<void> {
   try {
+    // Respect per-user opt-outs. Failure to read prefs is non-fatal — we
+    // default to sending rather than silently dropping notifications.
+    const enabled = await isKindEnabled(opts.recipientId, opts.kind).catch(() => true);
+    if (!enabled) return;
+
     await prisma.notification.create({
       data: {
         recipientId: opts.recipientId,

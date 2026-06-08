@@ -159,8 +159,9 @@ model User {
   coordinatorProfile CoordinatorProfile?
   adminProfile       AdminProfile?
 
-  healerPayouts      HealerPayout[] @relation("HealerPayouts")
-  payoutsCreated     HealerPayout[] @relation("PayoutsCreated")
+  healerPayouts           HealerPayout[]           @relation("HealerPayouts")
+  payoutsCreated          HealerPayout[]           @relation("PayoutsCreated")
+  notificationPreferences NotificationPreference[]
 }
 
 // ── Role-specific profiles ───────────────────────────────────────────────
@@ -1179,6 +1180,21 @@ model Notification {
 }
 
 // ── TOTP backup codes ─────────────────────────────────────────────────────
+// ── Notification preferences ─────────────────────────────────────────────────
+// Per-user opt-out table. Default is all kinds enabled — a row only exists
+// when the user explicitly disables a kind. `notify()` checks this before
+// writing to the Notification table.
+
+model NotificationPreference {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      NotificationKind
+  enabled   Boolean          @default(true)
+
+  @@unique([userId, kind])
+}
+
 // Generated at enrollment: 10 single-use codes stored as SHA-256 hashes.
 // Plaintext displayed ONCE (at generation time) and never stored.
 // Sign-in accepts a backup code in place of a TOTP code — usedAt is set

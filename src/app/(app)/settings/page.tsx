@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
 import { Card, CardContent } from "@/components/ui/card";
-import { Users, Package, GraduationCap, MessagesSquare, Wallet, ClipboardList, Shield } from "lucide-react";
+import { Users, Package, GraduationCap, MessagesSquare, Wallet, ClipboardList, Shield, Bell } from "lucide-react";
 import { getSettingPreview, SETTING_KEYS } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +31,7 @@ export default async function SettingsPage() {
       status: razLive ? { label: "Live", tone: "bg-emerald-100 text-emerald-900" } : { label: "Demo mode", tone: "bg-amber-100 text-amber-900" } },
     { href: "/settings/payouts",   icon: Wallet,        title: "Healer payouts",   description: "Record monthly disbursements to healers. Track pending vs paid per period." },
     { href: "/settings/audit-log", icon: ClipboardList, title: "Audit log",        description: "Who accessed what, and when. Append-only record of document views, thread opens, and admin actions." },
+    { href: "/settings/notifications", icon: Bell,       title: "Notifications",    description: "Choose which in-app notifications you receive. All are on by default." },
     { href: "/settings/security",  icon: Shield,        title: "Two-factor auth",  description: "Enable a 6-digit code from your authenticator app on top of your password." },
   ] as const;
 

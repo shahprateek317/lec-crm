@@ -23,6 +23,7 @@ import {
   UserCircle,
   TrendingUp,
   Shield,
+  Bell,
 } from "lucide-react";
 
 const NAV: Array<{ href: string; label: string; short: string; icon: React.ComponentType<{ className?: string }>; roles?: string[] }> = [
@@ -115,6 +116,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 >
                   <Shield className="h-3.5 w-3.5" />
                   Security
+                </Link>
+                <Link
+                  href="/settings/notifications"
+                  className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <Bell className="h-3.5 w-3.5" />
+                  Notifications
                 </Link>
                 <form action={signOutAction}>
                   <button
