@@ -3,6 +3,11 @@
 # We can't fully exercise the TOTP enroll flow over curl (it needs an
 # authenticator app), so we verify surfaces + the auth allowlist behaviour.
 set -uo pipefail
+
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh" --no-use
+export PATH="$NVM_DIR/versions/node/$(ls "$NVM_DIR/versions/node" | sort -V | tail -1)/bin:$PATH"
+
 URL=https://crm.lifeenergycentre.in
 COOKIE=$(mktemp); trap "rm -f $COOKIE" EXIT
 PASS=0

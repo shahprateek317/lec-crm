@@ -17,6 +17,12 @@
 
 set -uo pipefail
 
+# Ensure node is on PATH (installed via nvm in non-interactive shells)
+export NVM_DIR="$HOME/.nvm"
+# shellcheck disable=SC1091
+[ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh" --no-use
+export PATH="$NVM_DIR/versions/node/$(ls "$NVM_DIR/versions/node" | sort -V | tail -1)/bin:$PATH"
+
 URL=https://crm.lifeenergycentre.in
 COOKIE=$(mktemp); trap "rm -f $COOKIE" EXIT
 PASS=0
