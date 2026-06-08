@@ -13,7 +13,9 @@ const recordPayoutSchema = z.object({
   period:     periodSchema,
   gross:      z.coerce.number().int().min(0),
   deductions: z.coerce.number().int().min(0).default(0),
-  paidAt:     z.string().datetime({ local: true }).or(z.string().regex(/^\d{4}-\d{2}-\d{2}/)),
+  // Accept YYYY-MM-DD from <input type="date">; anchor to start-of-day UTC to avoid
+  // timezone-drift producing wrong financial dates.
+  paidAt:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Payment date must be YYYY-MM-DD"),
   paymentRef: z.string().max(200).optional(),
   notes:      z.string().max(1000).optional(),
 });
@@ -34,7 +36,8 @@ export async function recordPayoutAction(formData: FormData) {
 
   const parsed = recordPayoutSchema.safeParse(raw);
   if (!parsed.success) {
-    redirect(`/settings/payouts?error=${encodeURIComponent(parsed.error.issues[0].message)}`);
+    // Use a fixed code, not Zod's raw message, to avoid leaking schema details in the URL.
+    redirect("/settings/payouts?error=Invalid+form+data.+Please+check+all+fields.");
   }
 
   const { healerId, period, gross, deductions, paidAt, paymentRef, notes } = parsed.data;
@@ -73,7 +76,11 @@ export async function deletePayoutAction(formData: FormData) {
   const payout = await prisma.healerPayout.findUnique({ where: { id }, select: { id: true, healerId: true, period: true } });
   if (!payout) redirect("/settings/payouts?error=Payout+not+found");
 
-  await prisma.healerPayout.delete({ where: { id } });
+  try {
+    await prisma.healerPayout.delete({ where: { id } });
+  } catch {
+    redirect("/settings/payouts?error=Payout+already+deleted");
+  }
 
   await audit("PAYOUT_DELETED", "User", payout.healerId, {
     actorId: session.user.id,
