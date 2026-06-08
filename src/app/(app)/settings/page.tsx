@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
 import { Card, CardContent } from "@/components/ui/card";
-import { Users, Package, GraduationCap, MessagesSquare, Wallet, ClipboardList, Shield, Bell } from "lucide-react";
+import { Users, Package, GraduationCap, MessagesSquare, Wallet, ClipboardList, Shield, Bell, Mail } from "lucide-react";
 import { getSettingPreview, SETTING_KEYS } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +32,7 @@ export default async function SettingsPage() {
     { href: "/settings/payouts",   icon: Wallet,        title: "Healer payouts",   description: "Record monthly disbursements to healers. Track pending vs paid per period." },
     { href: "/settings/audit-log", icon: ClipboardList, title: "Audit log",        description: "Who accessed what, and when. Append-only record of document views, thread opens, and admin actions." },
     { href: "/settings/notifications", icon: Bell,       title: "Notifications",    description: "Choose which in-app notifications you receive. All are on by default." },
+    { href: "/settings/email",         icon: Mail,       title: "Email digest",     description: "Send staff a morning summary of their unread notifications via Resend." },
     { href: "/settings/security",  icon: Shield,        title: "Two-factor auth",  description: "Enable a 6-digit code from your authenticator app on top of your password." },
   ] as const;
 

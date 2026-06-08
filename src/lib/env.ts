@@ -25,6 +25,10 @@ const schema = z.object({
   RAZORPAY_KEY_SECRET: z.string().optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
 
+  EMAIL_PROVIDER:    z.enum(["stub", "resend"]).default("stub"),
+  EMAIL_API_KEY:     z.string().optional(),
+  EMAIL_FROM_ADDRESS: z.string().optional(),
+
   TZ: z.string().default("Asia/Kolkata"),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 

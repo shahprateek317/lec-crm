@@ -28,6 +28,10 @@ export const SETTING_KEYS = {
   razorpayKeyId:        "razorpay.key_id",
   razorpayKeySecret:    "razorpay.key_secret",
   razorpayWebhookSecret: "razorpay.webhook_secret",
+
+  emailProvider:   "email.provider",    // "stub" | "resend"
+  emailApiKey:     "email.api_key",     // Resend API key (sensitive)
+  emailFromAddress: "email.from_address", // e.g. "Life Energy Centre <hello@lifeenergycentre.in>"
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
@@ -38,6 +42,7 @@ export const SENSITIVE_KEYS: ReadonlySet<SettingKey> = new Set([
   SETTING_KEYS.whatsappAppSecret,
   SETTING_KEYS.razorpayKeySecret,
   SETTING_KEYS.razorpayWebhookSecret,
+  SETTING_KEYS.emailApiKey,
 ]);
 
 // ── Env fallbacks ─────────────────────────────────────────────────────
@@ -51,6 +56,9 @@ const ENV_FALLBACK: Partial<Record<SettingKey, string | undefined>> = {
   [SETTING_KEYS.razorpayKeyId]:        env.RAZORPAY_KEY_ID,
   [SETTING_KEYS.razorpayKeySecret]:    env.RAZORPAY_KEY_SECRET,
   [SETTING_KEYS.razorpayWebhookSecret]: env.RAZORPAY_WEBHOOK_SECRET,
+  [SETTING_KEYS.emailProvider]:    env.EMAIL_PROVIDER,
+  [SETTING_KEYS.emailApiKey]:      env.EMAIL_API_KEY,
+  [SETTING_KEYS.emailFromAddress]: env.EMAIL_FROM_ADDRESS,
 };
 
 // ── Read / write ──────────────────────────────────────────────────────
