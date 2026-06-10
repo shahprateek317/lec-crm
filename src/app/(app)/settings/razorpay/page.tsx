@@ -15,7 +15,7 @@ export const metadata = { title: "Razorpay" };
 export default async function RazorpaySettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; ok?: string; test?: string }>;
+  searchParams: Promise<{ error?: string; ok?: string; test?: string; newsecret?: string }>;
 }) {
   const session = await auth();
   if (!session?.user || !isAdmin(session.user.role)) redirect("/dashboard");
@@ -117,6 +117,19 @@ export default async function RazorpaySettingsPage({
               Generate new
             </button>
           </form>
+          {sp.newsecret && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-950">
+              <p className="mb-1 text-xs font-semibold text-amber-900 dark:text-amber-200">
+                Copy this secret now — it will not be shown again
+              </p>
+              <code className="block break-all text-xs font-mono text-amber-800 dark:text-amber-300 select-all">
+                {sp.newsecret}
+              </code>
+              <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-400">
+                Paste this into Razorpay → Settings → Webhooks → Secret field.
+              </p>
+            </div>
+          )}
           <p className="text-[11px] text-muted-foreground">
             Paste the same secret in Razorpay&apos;s webhook form.
           </p>
