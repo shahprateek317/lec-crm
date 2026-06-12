@@ -297,15 +297,7 @@ A permanent system user token does NOT expire. Here is exactly how to get one:
 7. Go to **https://crm.lifeenergycentre.in/settings/whatsapp**
 8. Paste the token in the **Access token** field → **Save**
 
-**If you see "you are not an admin":** The Meta app is owned by Prateek's personal
-Facebook account (Mahesh Shah). Only Prateek can generate this token.
-In that case, send Papa this message to forward to Prateek:
-
-> Prateek — the WhatsApp token expired. I need you to do this (2 min):
-> 1. Go to https://business.facebook.com/settings/system-users?business_id=3142025962748450
-> 2. Click lec_crm → Generate new token → LEC CRM app → tick whatsapp_business_messaging + whatsapp_business_management → Generate
-> 3. Send me the token (starts with EAA...)
-> I'll paste it at /settings/whatsapp immediately.
+**Note**: The Meta Business account showing as "Mahesh Shah" is Papa's own Facebook account — he has full admin access and can always generate this token himself.
 
 ### AWS root MFA — how Papa does it
 

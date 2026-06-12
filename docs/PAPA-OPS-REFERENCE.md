@@ -109,12 +109,7 @@ docker compose logs -f app     # wait for "✓ Ready"
 5. Copy the token (starts with `EAA...`)
 6. Go to https://crm.lifeenergycentre.in/settings/whatsapp → paste → Save
 
-**If "you are not admin"**: The Meta app was created by Prateek's personal account.
-Only Prateek can generate the token. Send him:
-> Prateek — WhatsApp token expired. 2 min fix:
-> 1. Go to https://business.facebook.com/settings/system-users?business_id=3142025962748450
-> 2. Click lec_crm → Generate new token → LEC CRM app → tick whatsapp_business_messaging + whatsapp_business_management → Generate
-> 3. Send me the EAA... token
+**Note**: The Meta Business account is under **Mahesh Shah** — that is Papa's own Facebook account. Papa has full admin access and can always generate this token himself without needing Prateek.
 
 ---
 
@@ -234,10 +229,10 @@ Test it works: `aws sts get-caller-identity`
 - Debugging app errors (logs + rollback)
 - Building new features
 
-## Things that MAY need Prateek (he owns the Facebook account)
+## Things that will NEVER need Prateek
 
-- Generating a new WhatsApp system user token (if Meta app is still under his account)
-- Adding Papa as a Meta Business Manager admin (one-time — once done, Papa can do everything himself)
+Nothing. The Meta Business account (Mahesh Shah) is Papa's own account.
+Papa has full control over all integrations.
 
 ---
 
