@@ -6,7 +6,37 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/rbac";
 import { createUser, ensureProfile } from "@/lib/users";
+import { sendEmail } from "@/lib/providers/email";
 import type { Role } from "@prisma/client";
+
+function welcomeEmailHtml(name: string, email: string, password: string, role: string): string {
+  const loginUrl = "https://crm.lifeenergycentre.in/sign-in";
+  const roleName = role.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+  return `<!DOCTYPE html>
+<html>
+<body style="font-family:Arial,sans-serif;background:#f9f9f9;margin:0;padding:32px;">
+  <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;padding:36px;border:1px solid #e5e7eb;">
+    <h2 style="color:#1a1a1a;margin-top:0;">Welcome to Life Energy Centre CRM</h2>
+    <p style="color:#444;">Namaste ${name},</p>
+    <p style="color:#444;">Your staff account has been created. Here are your login details:</p>
+    <table style="width:100%;margin:24px 0;border-collapse:collapse;">
+      <tr><td style="padding:8px 12px;background:#f3f4f6;border-radius:6px 6px 0 0;color:#6b7280;font-size:13px;">Role</td><td style="padding:8px 12px;background:#f3f4f6;border-radius:6px 6px 0 0;font-weight:600;">${roleName}</td></tr>
+      <tr><td style="padding:8px 12px;background:#f9fafb;color:#6b7280;font-size:13px;">Email</td><td style="padding:8px 12px;background:#f9fafb;font-weight:600;">${email}</td></tr>
+      <tr><td style="padding:8px 12px;background:#f3f4f6;border-radius:0 0 6px 6px;color:#6b7280;font-size:13px;">Password</td><td style="padding:8px 12px;background:#f3f4f6;border-radius:0 0 6px 6px;font-weight:600;font-family:monospace;">${password}</td></tr>
+    </table>
+    <a href="${loginUrl}" style="display:inline-block;background:#7c3aed;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;margin-bottom:24px;">Sign In to CRM</a>
+    <p style="color:#6b7280;font-size:13px;margin-top:24px;">Please change your password after signing in for the first time.</p>
+    <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">
+    <p style="color:#9ca3af;font-size:12px;margin:0;">Life Energy Centre · New Town, Kolkata</p>
+  </div>
+</body>
+</html>`;
+}
+
+function welcomeEmailText(name: string, email: string, password: string, role: string): string {
+  const roleName = role.replace(/_/g, " ");
+  return `Namaste ${name},\n\nYour Life Energy Centre CRM account has been created.\n\nRole: ${roleName}\nEmail: ${email}\nPassword: ${password}\n\nSign in at: https://crm.lifeenergycentre.in/sign-in\n\nPlease change your password after signing in.\n\nLife Energy Centre`;
+}
 
 const ROLES = [
   "SUPER_ADMIN", "ADMIN", "COORDINATOR", "COUNSELLOR", "SENIOR_COUNSELLOR",
@@ -38,6 +68,15 @@ export async function createUserAction(formData: FormData) {
   }
 
   const user = await createUser(parsed.data);
+
+  // Send welcome email — fire and forget so a mail failure doesn't block the redirect.
+  sendEmail({
+    to: user.email,
+    subject: "Welcome to Life Energy Centre CRM",
+    html: welcomeEmailHtml(user.name, user.email, parsed.data.password, user.role),
+    text: welcomeEmailText(user.name, user.email, parsed.data.password, user.role),
+  }).catch(err => console.error("[users] welcome email failed", err));
+
   revalidatePath("/settings/users");
   // Send the admin straight into the detail page to fill the rich profile.
   redirect(`/settings/users/${user.id}?ok=1`);
