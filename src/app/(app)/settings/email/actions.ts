@@ -10,7 +10,7 @@ import { sendEmail } from "@/lib/providers/email";
 const schema = z.object({
   provider:    z.enum(["stub", "resend"]),
   apiKey:      z.string().max(200).optional(),
-  fromAddress: z.string().email().max(200).optional(),
+  fromAddress: z.string().max(200).optional(),
 });
 
 export async function saveEmailSettingsAction(formData: FormData) {
