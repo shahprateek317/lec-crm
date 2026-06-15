@@ -129,21 +129,21 @@ export async function enrolClient(input: z.infer<typeof enrolSchema>) {
     // Everything above is in the transaction. Side-effects (provider link,
     // WhatsApp, stage transition) happen after commit — see below.
     return { enrolment, payment, course, client, feeToPay };
-  }).then(async (result) => {
-    if (result.payment && result.feeToPay > 0) {
+  }).then(async (txResult) => {
+    if (txResult.payment && txResult.feeToPay > 0) {
       const link = await getPaymentProvider().createPaymentLink({
-        amount: result.feeToPay,
-        description: `Course: ${result.course.name}`,
+        amount: txResult.feeToPay,
+        description: `Course: ${txResult.course.name}`,
         client: {
-          id: result.client.id,
-          name: result.client.name,
-          phone: result.client.phone,
-          email: result.client.email,
+          id: txResult.client.id,
+          name: txResult.client.name,
+          phone: txResult.client.phone,
+          email: txResult.client.email,
         },
-        reference: result.payment.id,
+        reference: txResult.payment.id,
       });
-      await prisma.payment.update({
-        where: { id: result.payment.id },
+      const updatedPayment = await prisma.payment.update({
+        where: { id: txResult.payment.id },
         data: {
           providerPaymentLinkId: link.providerLinkId,
           providerPaymentLinkUrl: link.url,
@@ -151,28 +151,29 @@ export async function enrolClient(input: z.infer<typeof enrolSchema>) {
       });
       getWhatsAppProvider()
         .sendTemplate({
-          clientId: result.client.id,
-          phone: result.client.phone,
+          clientId: txResult.client.id,
+          phone: txResult.client.phone,
           templateName: "payment_link",
           variables: [
-            result.client.name.split(" ")[0],
-            result.course.name,
-            String(result.feeToPay),
+            txResult.client.name.split(" ")[0],
+            txResult.course.name,
+            String(txResult.feeToPay),
             "0",
             link.url,
           ],
         })
         .catch((err) => console.error("[courses] WhatsApp failed", err));
+      return { ...txResult, payment: updatedPayment };
     } else {
       // Fully adjusted via credits — mark client converted now.
       await transitionStage({
-        clientId: result.client.id,
+        clientId: txResult.client.id,
         toStage: "CONVERTED",
         byUserId: parsed.byUserId,
-        note: `Enrolled in ${result.course.name} (fully credit-adjusted)`,
+        note: `Enrolled in ${txResult.course.name} (fully credit-adjusted)`,
       }).catch(() => void 0);
+      return txResult;
     }
-    return result;
   });
 }
 

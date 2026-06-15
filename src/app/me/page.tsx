@@ -10,6 +10,7 @@ import {
   CalendarHeart,
   Coins,
   Gift,
+  GraduationCap,
   LogOut,
   Shield,
   Sparkles,
@@ -150,6 +151,11 @@ export default async function MeDashboardPage({
             href="/me/documents"
             icon={<FileText className="h-4 w-4 text-sky-700" />}
             label="Your documents"
+          />
+          <RowLink
+            href="/me/courses"
+            icon={<GraduationCap className="h-4 w-4 text-violet-700" />}
+            label="Courses"
           />
         </CardContent>
       </Card>
