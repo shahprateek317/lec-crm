@@ -50,8 +50,9 @@ export async function clientEnrolAction(formData: FormData) {
 }
 
 function isSafePaymentUrl(url: string): boolean {
-  // Relative paths (stub /dev/pay/…) are always safe.
-  if (url.startsWith("/")) return true;
+  // Relative paths (stub /dev/pay/…) are safe — but reject protocol-relative
+  // URLs ("//evil.com/...") which browsers treat as absolute.
+  if (url.startsWith("/") && !url.startsWith("//")) return true;
   try {
     const origin = new URL(url).origin;
     return ALLOWED_PAYMENT_ORIGINS.includes(origin);
