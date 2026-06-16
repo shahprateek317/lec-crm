@@ -39,7 +39,7 @@ export const authConfig = {
       // Matched exactly (not prefix) to avoid accidentally publicising
       // /admin-enroll-something if such a route is added in the future.
       if (pathname === "/admin-enroll") return true;
-      const publicPaths = ["/", "/sign-in", "/enquiry", "/api/enquiry", "/dev/pay", "/confirm", "/me"];
+      const publicPaths = ["/", "/sign-in", "/enquiry", "/api/enquiry", "/dev/pay", "/confirm", "/me", "/privacy"];
       if (publicPaths.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
         return true;
       }
