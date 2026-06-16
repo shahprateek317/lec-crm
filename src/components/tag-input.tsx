@@ -38,6 +38,12 @@ export function TagInput({
     if (!v) return;
     setTags((prev) => (prev.some((t) => t.toLowerCase() === v.toLowerCase()) ? prev : [...prev, v]));
     setDraft("");
+    // Force the suggestion list back open after a pick — relying solely on
+    // the input's focus event was flaky (some browsers fire blur before the
+    // suggestion's mousedown re-focuses it), making it look like the whole
+    // dropdown vanished after the first selection instead of showing the
+    // remaining suggestions.
+    setOpen(true);
   };
 
   const remove = (v: string) => setTags((prev) => prev.filter((t) => t !== v));
