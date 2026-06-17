@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useEffect } from "react";
+import { useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
 
@@ -29,7 +29,7 @@ export function TagInput({
     Array.from(new Set(defaultValue.map((s) => s.trim()).filter(Boolean))),
   );
   const [draft, setDraft] = useState("");
-  const [open, setOpen] = useState(false);
+  const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -38,12 +38,6 @@ export function TagInput({
     if (!v) return;
     setTags((prev) => (prev.some((t) => t.toLowerCase() === v.toLowerCase()) ? prev : [...prev, v]));
     setDraft("");
-    // Force the suggestion list back open after a pick — relying solely on
-    // the input's focus event was flaky (some browsers fire blur before the
-    // suggestion's mousedown re-focuses it), making it look like the whole
-    // dropdown vanished after the first selection instead of showing the
-    // remaining suggestions.
-    setOpen(true);
   };
 
   const remove = (v: string) => setTags((prev) => prev.filter((t) => t !== v));
@@ -68,14 +62,16 @@ export function TagInput({
       .slice(0, 6);
   }, [draft, suggestions, tags]);
 
-  // Close suggestions when clicking outside.
-  useEffect(() => {
-    const onDocClick = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, []);
+  // Close suggestions when focus truly leaves the wrapper.
+  // We use setTimeout so the check runs after the browser has moved focus
+  // to the next element (e.g. a suggestion button), letting us see whether
+  // focus stayed inside the component or escaped entirely.
+  const handleInputBlur = () => {
+    setTimeout(() => {
+      if (wrapRef.current?.contains(document.activeElement)) return;
+      setFocused(false);
+    }, 0);
+  };
 
   return (
     <div ref={wrapRef} className="relative">
@@ -112,21 +108,20 @@ export function TagInput({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKey}
-          onFocus={() => setOpen(true)}
-          onBlur={() => add(draft)}
+          onFocus={() => setFocused(true)}
+          onBlur={handleInputBlur}
           placeholder={tags.length === 0 ? placeholder : ""}
           className="flex-1 min-w-[8ch] bg-transparent text-sm outline-none"
         />
       </div>
 
-      {open && filteredSuggestions.length > 0 && (
+      {focused && filteredSuggestions.length > 0 && (
         <ul className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-border bg-popover shadow-md">
           {filteredSuggestions.map((s) => (
             <li key={s}>
               <button
                 type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
+                onClick={() => {
                   add(s);
                   inputRef.current?.focus();
                 }}
