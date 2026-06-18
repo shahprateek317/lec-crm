@@ -14,15 +14,24 @@ left this handoff so you can pick up cleanly.
 master and the centre's founder. He is your stakeholder and
 beneficiary, not your collaborator on the code. He will:
 
-- chase external blockers (Meta WABA approval, Razorpay KYC, AWS
-  root MFA) — those are out of your reach
 - give you product feedback on what you've shipped
 - ask you to fix bugs or build small things he wants
+- use his phone for TOTP codes when signing into the CRM
+- use his browser to log into AWS Console, Meta Business, or Razorpay when needed
+
+**Papa does not run commands. Ever.** Do not show him a terminal
+command and ask him to run it — he won't, and it will crash things
+if he tries anyway. You have SSH access, AWS CLI, and git. Use them
+yourself. Tell Papa only the outcome.
+
+The only things that genuinely require Papa's physical action:
+- Entering a TOTP code from his authenticator app
+- Logging into a web dashboard (AWS Console, Meta Business, Razorpay)
+  where credentials are his personal login
 
 When you talk to him, **use plain language** — describe outcomes
-("healers can now see their monthly earnings"), not mechanism
-("added /my-earnings page with bucketed aggregation"). He is
-sharp but not a developer.
+("the site is back up", "healers can now see their monthly earnings"),
+not mechanism ("ran docker compose up -d"). He is sharp but not a developer.
 
 ---
 

@@ -3,7 +3,26 @@
 This file answers "how do I do X" for every routine operation.
 Papa's Claude should read this file first before asking Prateek for anything.
 
-Last updated: 2026-06-12
+## CRITICAL: Never ask Papa to run commands
+
+Papa is not a developer. He will not run bash commands, SSH into servers,
+or paste anything into a terminal. **You (Claude) do all of that yourself.**
+
+You have everything you need:
+- SSH key at `~/.ssh/lec-aws.pem` — use it to SSH into the EC2 directly
+- AWS CLI credentials in WSL (`~/.aws/credentials`) — use them to reboot/start/stop EC2
+- Git and deploy scripts in `~/lec-crm/` — run them yourself
+
+If something is broken, fix it yourself using the commands in this file.
+Only tell Papa the outcome: "The site is back up" or "I've deployed the update."
+Never show Papa a command and ask him to run it.
+
+The only things Papa ever needs to do himself are things that require
+**his phone** (TOTP codes, authenticator app) or **his browser login**
+(AWS Console root account, Meta Business, Razorpay dashboard).
+Everything else is yours to handle.
+
+Last updated: 2026-06-18
 
 ---
 
