@@ -8,6 +8,7 @@ import { authConfig } from "@/lib/auth.config";
 import { decryptFromStorage } from "@/lib/crypto";
 import { verifyTotpCode } from "@/lib/totp";
 import { consumeBackupCode } from "@/lib/backup-codes";
+import { verifyPreauthToken } from "@/lib/preauth-token";
 import type { Role } from "@prisma/client";
 
 // ── TOTP signalling errors ────────────────────────────────────────────
@@ -47,9 +48,9 @@ declare module "next-auth" {
 
 const credentialsSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(6),
-  // Optional on the first POST — present on the 2-step retry.
+  password: z.string().min(0).optional(),
   totpCode: z.string().optional(),
+  preauthToken: z.string().optional(),
 });
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -71,11 +72,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         });
         if (!user || !user.active) return null;
 
-        // Constant-time-ish password check happens regardless of TOTP
-        // state — keep that first to avoid leaking "this email exists"
-        // via timing on the TOTP branch.
-        const passwordOk = await bcrypt.compare(parsed.data.password, user.passwordHash);
-        if (!passwordOk) return null;
+        // Step 2 (TOTP-only): if a valid pre-auth token is present for this
+        // email, skip the password re-check — password was already verified
+        // in step 1 and the token proves it.
+        const preauth = parsed.data.preauthToken
+          ? verifyPreauthToken(parsed.data.preauthToken)
+          : { ok: false as const };
+        const passwordAlreadyVerified =
+          preauth.ok && preauth.email.toLowerCase() === parsed.data.email.toLowerCase();
+
+        if (!passwordAlreadyVerified) {
+          if (!parsed.data.password) return null;
+          const passwordOk = await bcrypt.compare(parsed.data.password, user.passwordHash);
+          if (!passwordOk) return null;
+        }
 
         // ── Admin TOTP enrollment enforcement ──
         // ADMIN and SUPER_ADMIN must have TOTP active before getting a

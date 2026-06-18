@@ -25,6 +25,7 @@ import {
   generateEnrollmentToken,
   ENROLLMENT_COOKIE,
 } from "@/lib/enrollment-token";
+import { generatePreauthToken, PREAUTH_COOKIE } from "@/lib/preauth-token";
 
 export async function signInAction(formData: FormData) {
   const email       = String(formData.get("email") ?? "");
@@ -56,6 +57,19 @@ export async function signInAction(formData: FormData) {
           maxAge: 15 * 60,
         });
         redirect("/admin-enroll");
+      }
+
+      // After password is verified but TOTP is still needed, issue a
+      // short-lived pre-auth cookie so step 2 doesn't ask for the password again.
+      if (code === "totp_required") {
+        const cookieStore = await cookies();
+        cookieStore.set(PREAUTH_COOKIE, generatePreauthToken(email), {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          path: "/sign-in",
+          maxAge: 5 * 60,
+        });
       }
 
       const params = new URLSearchParams({

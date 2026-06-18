@@ -13,6 +13,8 @@ import { signInAction } from "./actions";
 import { t } from "@/lib/i18n";
 import Link from "next/link";
 import { env } from "@/lib/env";
+import { cookies } from "next/headers";
+import { verifyPreauthToken, PREAUTH_COOKIE } from "@/lib/preauth-token";
 import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Sign in" };
@@ -50,6 +52,19 @@ export default async function SignInPage({
   // and ask the user to re-enter password + code together. The signIn
   // action handles both fields in one call.
   const needsTotp = sp.error === "totp_required" || sp.error === "totp_invalid";
+
+  // On the TOTP step, read the pre-auth cookie so we can skip password re-entry.
+  let preauthToken: string | null = null;
+  if (needsTotp) {
+    const cookieStore = await cookies();
+    const raw = cookieStore.get(PREAUTH_COOKIE)?.value;
+    if (raw) {
+      const result = verifyPreauthToken(raw);
+      if (result.ok && result.email.toLowerCase() === (sp.email ?? "").toLowerCase()) {
+        preauthToken = raw;
+      }
+    }
+  }
 
   return (
     <main className="pranic-glow flex min-h-screen items-center justify-center px-6 py-12">
@@ -127,21 +142,25 @@ export default async function SignInPage({
             />
           </div>
 
-          <div className="space-y-1.5">
-            <label htmlFor="password" className="text-sm font-medium">
-              {t.signIn.password}
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              minLength={6}
-              autoFocus={!needsTotp}
-              className="flex h-10 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-          </div>
+          {preauthToken ? (
+            <input type="hidden" name="preauthToken" value={preauthToken} />
+          ) : (
+            <div className="space-y-1.5">
+              <label htmlFor="password" className="text-sm font-medium">
+                {t.signIn.password}
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+                minLength={6}
+                autoFocus={!needsTotp}
+                className="flex h-10 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
+          )}
 
           {needsTotp && (
             <div className="space-y-1.5">
