@@ -35,6 +35,7 @@ const NAV: Array<{ href: string; label: string; short: string; icon: React.Compo
   { href: "/distant-healing", label: "Distant Healing",      short: "Distant",    icon: MessagesSquare },
   { href: "/payments",        label: "Payments & Credits",   short: "Payments",   icon: Wallet },
   { href: "/courses",         label: "Courses",              short: "Courses",    icon: GraduationCap },
+  { href: "/inbox",           label: "WhatsApp Inbox",       short: "Inbox",      icon: MessagesSquare },
   { href: "/follow-ups",      label: "Follow-ups",           short: "Follow-ups", icon: Clock },
   { href: "/me/profile",      label: "My profile",           short: "Me",         icon: UserCircle, roles: ["HEALER", "SENIOR_HEALER"] },
   { href: "/my-earnings",     label: "My earnings",          short: "Earnings",   icon: TrendingUp, roles: ["HEALER", "SENIOR_HEALER"] },
