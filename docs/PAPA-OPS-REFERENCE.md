@@ -42,8 +42,8 @@ Last updated: 2026-06-18
 
 ## Admin login
 
-- Email: `admin@lec.app`
-- Password: `Demo1234` (change this at /settings/users)
+- Email: `mkshah@pecon.co.in`
+- Password: `LEC@2024`
 - TOTP: Papa has the authenticator code on his phone. The 6-digit code refreshes every 30 seconds — use the CURRENT code, not the one from 30 seconds ago.
 - If the code says "didn't match": wait for the code to refresh (up to 30 seconds), try again with the new code.
 
