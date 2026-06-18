@@ -18,6 +18,8 @@ import { verifyPreauthToken, PREAUTH_COOKIE } from "@/lib/preauth-token";
 import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Sign in" };
+export const dynamic = "force-dynamic";
+export const headers = async () => [["Cache-Control", "no-store, no-cache, must-revalidate"]];
 
 const DEMO_ROLES = [
   { role: "Admin",       email: "admin@lec.app",       tone: "bg-primary/10 text-primary" },
