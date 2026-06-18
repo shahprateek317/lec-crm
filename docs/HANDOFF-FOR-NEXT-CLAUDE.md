@@ -96,7 +96,11 @@ This is the rhythm. Stay in it.
 8. npm test               # full suite green (you added cases; total grows)
 9. Commit (small, focused). Use HEREDOC for the commit message.
 10. Push to main: git push origin main.
-11. Deploy: bash scripts/deploy.sh   (background it; the harness
+11. Deploy: bash scripts/deploy.sh   — ALWAYS use this script, NEVER run
+    `docker compose build --no-cache` directly. The EC2 is a t3.small;
+    --no-cache rebuilds every layer from scratch and OOM-kills the server.
+    The deploy script uses cached layers and stays within memory limits.
+    (background it; the harness
     notifies you on completion). This SSHes to EC2, git-pulls
     main, rebuilds the app container, tails logs. Use
     scripts/deploy-rsync.sh instead for uncommitted-working-tree

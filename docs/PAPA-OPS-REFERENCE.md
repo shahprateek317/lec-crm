@@ -42,6 +42,18 @@ bash scripts/deploy.sh
 `deploy.sh` SSHes to EC2, pulls the new code, rebuilds the container.
 Wait for "✓ Ready" in the logs (~2–3 minutes).
 
+**NEVER run any of these directly on the EC2 — they will crash the server:**
+```
+# DO NOT RUN THESE:
+docker compose build --no-cache   ← kills the server every time (OOM)
+docker compose build              ← also risky without the deploy script
+npm install / npm run build       ← not enough RAM on t3.small
+```
+
+The deploy script uses Docker layer caching which keeps memory usage low.
+`--no-cache` discards all cached layers and rebuilds from scratch — the server
+runs out of RAM and dies mid-build. Always use `bash scripts/deploy.sh`.
+
 ---
 
 ## EC2 management
