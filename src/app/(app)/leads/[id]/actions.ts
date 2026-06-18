@@ -65,7 +65,9 @@ export async function sendTemplateAction(formData: FormData) {
 
   // Guess variables for known templates from the client record.
   let variables: string[] = [];
-  if (templateName === "lead_welcome" || templateName === "visit_invitation" || templateName === "feedback_request") {
+  if (templateName === "lead_welcome") {
+    variables = [client.name.split(" ")[0], "https://crm.lifeenergycentre.in/files/lec-brochure.pdf"];
+  } else if (templateName === "visit_invitation" || templateName === "feedback_request") {
     variables = [client.name.split(" ")[0]];
   }
 

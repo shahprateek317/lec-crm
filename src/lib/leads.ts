@@ -100,7 +100,7 @@ export async function createLead(input: LeadInput, opts: { silent?: boolean } = 
         clientId: client.id,
         phone,
         templateName: "lead_welcome",
-        variables: [client.name.split(" ")[0]],
+        variables: [client.name.split(" ")[0], "https://crm.lifeenergycentre.in/files/lec-brochure.pdf"],
       })
       .catch((err) => {
         console.error("[leads] welcome WhatsApp failed", err);
