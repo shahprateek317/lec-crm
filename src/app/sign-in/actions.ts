@@ -28,16 +28,18 @@ import {
 import { generatePreauthToken, PREAUTH_COOKIE } from "@/lib/preauth-token";
 
 export async function signInAction(formData: FormData) {
-  const email       = String(formData.get("email") ?? "");
-  const password    = String(formData.get("password") ?? "");
-  const totpCode    = String(formData.get("totpCode") ?? "").trim();
-  const callbackUrl = String(formData.get("callbackUrl") ?? "/dashboard");
+  const email         = String(formData.get("email") ?? "");
+  const password      = String(formData.get("password") ?? "");
+  const totpCode      = String(formData.get("totpCode") ?? "").trim();
+  const preauthToken  = String(formData.get("preauthToken") ?? "");
+  const callbackUrl   = String(formData.get("callbackUrl") ?? "/dashboard");
 
   try {
     await signIn("credentials", {
       email,
-      password,
+      password: password || undefined,
       totpCode: totpCode || undefined,
+      preauthToken: preauthToken || undefined,
       redirectTo: callbackUrl,
     });
   } catch (err) {
