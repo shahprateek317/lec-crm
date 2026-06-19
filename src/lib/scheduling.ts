@@ -70,11 +70,12 @@ export async function scheduleCounseling(input: z.infer<typeof counselingSchedul
     getWhatsAppProvider()
       .sendTemplate({
         phone: counsellorPhone,
-        templateName: "healer_assignment",
+        templateName: "counsellor_session_assigned",
         variables: [
           session.counsellor.name.split(" ")[0],
           session.client.name,
           format(parsed.scheduledAt, "dd MMM, HH:mm"),
+          meetLink,
         ],
       })
       .catch((err) => console.error("[scheduling] counsellor notify WhatsApp failed", err));
