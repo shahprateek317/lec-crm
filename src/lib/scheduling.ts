@@ -41,12 +41,8 @@ export async function scheduleCounseling(input: z.infer<typeof counselingSchedul
     },
     include: { counsellor: true, client: true },
   });
-  await transitionStage({
-    clientId: parsed.clientId,
-    toStage: "COUNSELING_SCHEDULED",
-    byUserId: parsed.byUserId,
-    note: `Counselling with ${session.counsellor.name} at ${format(parsed.scheduledAt, "dd MMM yyyy HH:mm")}`,
-  });
+  // Send confirmation WhatsApp fire-and-forget — must not be blocked
+  // by a stage transition error (e.g. lead still in NEW stage).
   getWhatsAppProvider()
     .sendTemplate({
       clientId: parsed.clientId,
@@ -59,6 +55,13 @@ export async function scheduleCounseling(input: z.infer<typeof counselingSchedul
       ],
     })
     .catch((err) => console.error("[scheduling] counseling confirm WhatsApp failed", err));
+  // Stage transition is best-effort — the session is booked regardless.
+  await transitionStage({
+    clientId: parsed.clientId,
+    toStage: "COUNSELING_SCHEDULED",
+    byUserId: parsed.byUserId,
+    note: `Counselling with ${session.counsellor.name} at ${format(parsed.scheduledAt, "dd MMM yyyy HH:mm")}`,
+  }).catch((err) => console.error("[scheduling] stage transition failed (non-fatal):", err?.message));
   return session;
 }
 
