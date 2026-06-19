@@ -82,9 +82,6 @@ export async function sendTemplateAction(formData: FormData) {
       upcoming ? format(upcoming.scheduledAt, "dd MMM, HH:mm") : "—",
       upcoming?.counsellor.name ?? "—",
     ];
-    if (templateName === "counseling_meeting_link" && upcoming?.meetLink) {
-      buttonSuffix = upcoming.meetLink.split("/").pop();
-    }
   }
 
   await getWhatsAppProvider().sendTemplate({
