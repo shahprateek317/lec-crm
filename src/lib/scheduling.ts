@@ -13,7 +13,7 @@ import { randomBytes } from "node:crypto";
 
 function generateMeetLink(): string {
   const code = randomBytes(5).toString("hex").toUpperCase();
-  return `https://crm.lifeenergycentre.in/meet/${code}`;
+  return `https://meet.jit.si/LEC-${code}`;
 }
 
 // ── Counselling ─────────────────────────────────────────────────────────
