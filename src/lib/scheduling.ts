@@ -214,6 +214,14 @@ export async function scheduleVisit(input: z.infer<typeof visitScheduleSchema>) 
         })
         .catch((err) => console.error("[scheduling] healer_assignment WhatsApp failed", err));
     }
+    if (assignedHealerId) {
+      await notifyMany([assignedHealerId], {
+        kind: "OTHER",
+        title: `New visit — ${client.name}`,
+        body: `You have a session with ${client.name} on ${format(parsed.scheduledAt, "dd MMM, HH:mm")}.`,
+        href: `/leads/${client.id}`,
+      });
+    }
   }
   return visit;
 }
