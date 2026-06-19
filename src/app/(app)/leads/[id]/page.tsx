@@ -177,6 +177,16 @@ export default async function LeadDetailPage({
                     <p className="truncate text-xs text-muted-foreground">
                       with {openCounselling.counsellor.name}
                     </p>
+                    {openCounselling.meetLink && (
+                      <a
+                        href={openCounselling.meetLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1 inline-block truncate text-xs font-medium text-primary hover:underline"
+                      >
+                        🔗 Meeting link
+                      </a>
+                    )}
                   </div>
                   <Link
                     href={`/leads/${client.id}/counselling/${openCounselling.id}/complete`}

@@ -9,6 +9,12 @@ import { getWhatsAppProvider } from "@/lib/providers/whatsapp";
 import { pickHealer, pickCounsellor } from "@/lib/assignment";
 import { grantReferralReward } from "@/lib/referral";
 import { format } from "date-fns";
+import { randomBytes } from "node:crypto";
+
+function generateMeetLink(): string {
+  const code = randomBytes(5).toString("hex").toUpperCase();
+  return `https://crm.lifeenergycentre.in/meet/${code}`;
+}
 
 // ── Counselling ─────────────────────────────────────────────────────────
 export const counselingScheduleSchema = z.object({
@@ -33,11 +39,13 @@ export async function scheduleCounseling(input: z.infer<typeof counselingSchedul
     counsellorId = picked.id;
   }
 
+  const meetLink = generateMeetLink();
   const session = await prisma.counselingSession.create({
     data: {
       clientId: parsed.clientId,
       counsellorId,
       scheduledAt: parsed.scheduledAt,
+      meetLink,
     },
     include: { counsellor: true, client: true },
   });

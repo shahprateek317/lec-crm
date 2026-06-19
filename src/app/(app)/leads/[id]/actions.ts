@@ -80,6 +80,7 @@ export async function sendTemplateAction(formData: FormData) {
       client.name.split(" ")[0],
       upcoming ? format(upcoming.scheduledAt, "dd MMM, HH:mm") : "—",
       upcoming?.counsellor.name ?? "—",
+      upcoming?.meetLink ?? "—",
     ];
   }
 

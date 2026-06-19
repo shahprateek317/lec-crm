@@ -531,6 +531,7 @@ model CounselingSession {
   counsellorId String
   counsellor   User      @relation(fields: [counsellorId], references: [id])
   scheduledAt  DateTime
+  meetLink     String?
   doneAt       DateTime?
   issueRefined String?
   severity     Int?
