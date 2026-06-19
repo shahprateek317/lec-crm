@@ -26,7 +26,7 @@ const NEXT: Record<PipelineStage, PipelineStage[]> = {
   COUNSELING_SCHEDULED: ["COUNSELING_DONE", "ON_HOLD", "LOST"],
   COUNSELING_DONE:      ["VISIT_SCHEDULED", "ON_HOLD", "LOST"],
   VISIT_SCHEDULED:      ["VISIT_DONE", "ON_HOLD", "LOST"],
-  VISIT_DONE:           ["HEALING_ACTIVE", "CONVERTED", "ON_HOLD", "LOST"],
+  VISIT_DONE:           ["VISIT_SCHEDULED", "HEALING_ACTIVE", "CONVERTED", "ON_HOLD", "LOST"],
   HEALING_ACTIVE:       ["CONVERTED", "ON_HOLD", "LOST"],
   CONVERTED:            ["HEALING_ACTIVE"],
   ON_HOLD:              STAGES.filter((s) => s !== "ON_HOLD"),
