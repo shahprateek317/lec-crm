@@ -66,11 +66,12 @@ export async function sendTemplateAction(formData: FormData) {
 
   // Guess variables for known templates from the client record.
   let variables: string[] = [];
+  let buttonSuffix: string | undefined;
   if (templateName === "lead_welcome") {
     variables = [client.name.split(" ")[0], "https://crm.lifeenergycentre.in/files/lec-brochure.pdf"];
   } else if (templateName === "visit_invitation" || templateName === "feedback_request") {
     variables = [client.name.split(" ")[0]];
-  } else if (templateName === "counseling_confirmation") {
+  } else if (templateName === "counseling_confirmation" || templateName === "counseling_meeting_link") {
     const upcoming = await prisma.counselingSession.findFirst({
       where: { clientId, scheduledAt: { gte: new Date() } },
       orderBy: { scheduledAt: "asc" },
@@ -80,8 +81,10 @@ export async function sendTemplateAction(formData: FormData) {
       client.name.split(" ")[0],
       upcoming ? format(upcoming.scheduledAt, "dd MMM, HH:mm") : "—",
       upcoming?.counsellor.name ?? "—",
-      upcoming?.meetLink ?? "—",
     ];
+    if (templateName === "counseling_meeting_link" && upcoming?.meetLink) {
+      buttonSuffix = upcoming.meetLink.split("/").pop();
+    }
   }
 
   await getWhatsAppProvider().sendTemplate({
@@ -89,6 +92,7 @@ export async function sendTemplateAction(formData: FormData) {
     phone: client.phone,
     templateName,
     variables,
+    buttonSuffix,
   });
   revalidatePath(`/leads/${clientId}`);
 }

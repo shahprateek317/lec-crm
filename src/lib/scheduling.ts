@@ -51,16 +51,18 @@ export async function scheduleCounseling(input: z.infer<typeof counselingSchedul
   });
   // Send confirmation WhatsApp fire-and-forget — must not be blocked
   // by a stage transition error (e.g. lead still in NEW stage).
+  const meetCode = meetLink.split("/").pop() ?? "";
   getWhatsAppProvider()
     .sendTemplate({
       clientId: parsed.clientId,
       phone: session.client.phone,
-      templateName: "counseling_confirmation",
+      templateName: "counseling_meeting_link",
       variables: [
         session.client.name.split(" ")[0],
         format(parsed.scheduledAt, "dd MMM, HH:mm"),
         session.counsellor.name,
       ],
+      buttonSuffix: meetCode,
     })
     .catch((err) => console.error("[scheduling] counseling confirm WhatsApp failed", err));
   // Notify the counsellor via WhatsApp (uses their whatsappPhone if set, else phone).

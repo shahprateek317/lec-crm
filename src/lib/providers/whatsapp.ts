@@ -21,6 +21,7 @@ export type SendTemplateInput = {
   phone: string;
   templateName: string;
   variables?: string[];
+  buttonSuffix?: string;
 };
 
 export type SendTextInput = {
@@ -268,6 +269,16 @@ class MetaWhatsAppProvider implements WhatsAppProvider {
           sub_type: "url",
           index: "0",
           parameters: [{ type: "text", text: input.variables[0] }],
+        });
+      }
+      // counseling_meeting_link has a dynamic URL button whose suffix is
+      // the meeting room code (last segment of the meetLink URL).
+      if (tpl.name === "counseling_meeting_link" && input.buttonSuffix) {
+        components.push({
+          type: "button",
+          sub_type: "url",
+          index: "0",
+          parameters: [{ type: "text", text: input.buttonSuffix }],
         });
       }
       const { messageId } = await this.post({
