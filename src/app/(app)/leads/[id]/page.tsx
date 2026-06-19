@@ -39,7 +39,7 @@ export default async function LeadDetailPage({
   const viewerIsAdmin = !!session?.user && isAdmin(session.user.role);
 
   const creditBalance = await getCreditBalance(id);
-  const [client, staff, templates, counsellings, visits, recentPayments, recentHealing] = await Promise.all([
+  const [client, staff, templates, counsellings, visits, recentPayments, upcomingHealingSessions, recentHealing] = await Promise.all([
     prisma.client.findUnique({
       where: { id },
       include: {
@@ -79,6 +79,11 @@ export default async function LeadDetailPage({
       where: { clientId: id },
       orderBy: { createdAt: "desc" },
       take: 5,
+    }),
+    prisma.healingSession.findMany({
+      where: { clientId: id, scheduledAt: { gte: new Date() } },
+      orderBy: { scheduledAt: "asc" },
+      include: { healer: { select: { name: true } } },
     }),
     prisma.healingSession.findMany({
       where: { clientId: id },
@@ -370,6 +375,12 @@ export default async function LeadDetailPage({
                   + Payment
                 </Link>
                 <Link
+                  href={`/leads/${client.id}/healing/schedule`}
+                  className="inline-flex h-9 items-center gap-1 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                >
+                  <Sparkles className="h-3.5 w-3.5" /> Schedule healing
+                </Link>
+                <Link
                   href={`/leads/${client.id}/healing/new`}
                   className="inline-flex h-9 items-center gap-1 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted"
                 >
@@ -388,6 +399,26 @@ export default async function LeadDetailPage({
                   Courses
                 </Link>
               </div>
+              {upcomingHealingSessions.length > 0 && (
+                <div className="space-y-2">
+                  {upcomingHealingSessions.map((hs) => (
+                    <div key={hs.id} className="flex items-center justify-between gap-3 rounded-lg bg-muted/50 p-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">
+                          {hs.mode === "DISTANT" ? "Distant" : "In-person"} healing · {format(hs.scheduledAt!, "dd MMM, HH:mm")}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">with {hs.healer.name}</p>
+                        {hs.meetLink && (
+                          <a href={hs.meetLink} target="_blank" rel="noopener noreferrer"
+                             className="mt-1 inline-block text-xs font-medium text-primary hover:underline">
+                            🔗 Meeting link
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
               {recentHealing.length > 0 && (
                 <details className="text-xs text-muted-foreground">
                   <summary className="cursor-pointer hover:text-foreground">Recent sessions</summary>

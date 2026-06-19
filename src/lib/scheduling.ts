@@ -149,6 +149,71 @@ export async function completeCounseling(input: z.infer<typeof counselingComplet
   return session;
 }
 
+// ── Healing sessions (advance scheduling) ───────────────────────────────
+export const healingScheduleSchema = z.object({
+  clientId: z.string().min(1),
+  healerId: z.string().min(1),
+  mode: z.enum(["IN_PERSON", "DISTANT"]).default("IN_PERSON"),
+  scheduledAt: z.coerce.date(),
+  byUserId: z.string().min(1),
+});
+
+export async function scheduleHealingSession(input: z.infer<typeof healingScheduleSchema>) {
+  const parsed = healingScheduleSchema.parse(input);
+
+  const meetLink = parsed.mode === "DISTANT" ? generateMeetLink() : null;
+
+  const session = await prisma.healingSession.create({
+    data: {
+      clientId: parsed.clientId,
+      healerId: parsed.healerId,
+      mode: parsed.mode,
+      scheduledAt: parsed.scheduledAt,
+      meetLink,
+      // date stays default(now()) — will be overwritten when session is logged
+    },
+    include: { healer: true, client: true },
+  });
+
+  const dateStr = format(parsed.scheduledAt, "dd MMM, HH:mm");
+
+  // Notify client via WhatsApp
+  getWhatsAppProvider()
+    .sendTemplate({
+      clientId: parsed.clientId,
+      phone: session.client.phone,
+      templateName: parsed.mode === "DISTANT" ? "healing_session_link" : "healing_session_confirmed",
+      variables: parsed.mode === "DISTANT"
+        ? [session.client.name.split(" ")[0], dateStr, session.healer.name, meetLink!]
+        : [session.client.name.split(" ")[0], dateStr, session.healer.name],
+    })
+    .catch((err) => console.error("[scheduling] healing client WhatsApp failed", err));
+
+  // Notify healer via WhatsApp
+  const healerPhone = session.healer.whatsappPhone ?? session.healer.phone;
+  if (healerPhone) {
+    getWhatsAppProvider()
+      .sendTemplate({
+        phone: healerPhone,
+        templateName: parsed.mode === "DISTANT" ? "healer_healing_link" : "healer_healing_assigned",
+        variables: parsed.mode === "DISTANT"
+          ? [session.healer.name.split(" ")[0], session.client.name, dateStr, meetLink!]
+          : [session.healer.name.split(" ")[0], session.client.name, dateStr],
+      })
+      .catch((err) => console.error("[scheduling] healing healer WhatsApp failed", err));
+  }
+
+  // In-app notification to healer
+  await notifyMany([parsed.healerId], {
+    kind: "OTHER",
+    title: `New healing session — ${session.client.name}`,
+    body: `${parsed.mode === "DISTANT" ? "Distant" : "In-person"} session with ${session.client.name} on ${dateStr}.`,
+    href: `/leads/${parsed.clientId}`,
+  });
+
+  return session;
+}
+
 // ── Visits ─────────────────────────────────────────────────────────────
 export const visitScheduleSchema = z.object({
   clientId: z.string().min(1),
