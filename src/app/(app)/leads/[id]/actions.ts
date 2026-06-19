@@ -71,7 +71,7 @@ export async function sendTemplateAction(formData: FormData) {
     variables = [client.name.split(" ")[0], "https://crm.lifeenergycentre.in/files/lec-brochure.pdf"];
   } else if (templateName === "visit_invitation" || templateName === "feedback_request") {
     variables = [client.name.split(" ")[0]];
-  } else if (templateName === "counseling_confirmation" || templateName === "counseling_meeting_link") {
+  } else if (templateName === "counseling_confirmation" || templateName === "counseling_meeting_link" || templateName === "session_join_link") {
     const upcoming = await prisma.counselingSession.findFirst({
       where: { clientId, scheduledAt: { gte: new Date() } },
       orderBy: { scheduledAt: "asc" },
@@ -82,6 +82,9 @@ export async function sendTemplateAction(formData: FormData) {
       upcoming ? format(upcoming.scheduledAt, "dd MMM, HH:mm") : "—",
       upcoming?.counsellor.name ?? "—",
     ];
+    if (templateName === "session_join_link" && upcoming?.meetLink) {
+      variables.push(upcoming.meetLink);
+    }
   }
 
   await getWhatsAppProvider().sendTemplate({
