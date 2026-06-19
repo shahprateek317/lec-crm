@@ -224,7 +224,7 @@ export default async function LeadDetailPage({
                     + Schedule counselling
                   </Link>
                 )}
-                {!openVisit && (client.stage === "COUNSELING_DONE" || client.stage === "VISIT_DONE" || client.stage === "HEALING_ACTIVE") && (
+                {(client.stage === "COUNSELING_DONE" || client.stage === "VISIT_DONE" || client.stage === "HEALING_ACTIVE") && (
                   <Link
                     href={`/leads/${client.id}/visits/new`}
                     className="inline-flex h-9 items-center rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted"
