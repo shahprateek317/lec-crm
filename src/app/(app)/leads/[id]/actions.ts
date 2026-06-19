@@ -8,6 +8,7 @@ import { transitionStage } from "@/lib/pipeline";
 import { getWhatsAppProvider } from "@/lib/providers/whatsapp";
 import { audit } from "@/lib/audit";
 import type { PipelineStage } from "@prisma/client";
+import { format } from "date-fns";
 
 export async function transitionStageAction(formData: FormData) {
   const session = await requireSession();
@@ -69,6 +70,17 @@ export async function sendTemplateAction(formData: FormData) {
     variables = [client.name.split(" ")[0], "https://crm.lifeenergycentre.in/files/lec-brochure.pdf"];
   } else if (templateName === "visit_invitation" || templateName === "feedback_request") {
     variables = [client.name.split(" ")[0]];
+  } else if (templateName === "counseling_confirmation") {
+    const upcoming = await prisma.counselingSession.findFirst({
+      where: { clientId, scheduledAt: { gte: new Date() } },
+      orderBy: { scheduledAt: "asc" },
+      include: { counsellor: true },
+    });
+    variables = [
+      client.name.split(" ")[0],
+      upcoming ? format(upcoming.scheduledAt, "dd MMM, HH:mm") : "—",
+      upcoming?.counsellor.name ?? "—",
+    ];
   }
 
   await getWhatsAppProvider().sendTemplate({
