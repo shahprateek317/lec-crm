@@ -55,6 +55,21 @@ export async function scheduleCounseling(input: z.infer<typeof counselingSchedul
       ],
     })
     .catch((err) => console.error("[scheduling] counseling confirm WhatsApp failed", err));
+  // Notify the counsellor via WhatsApp (uses their whatsappPhone if set, else phone).
+  const counsellorPhone = session.counsellor.whatsappPhone ?? session.counsellor.phone;
+  if (counsellorPhone) {
+    getWhatsAppProvider()
+      .sendTemplate({
+        phone: counsellorPhone,
+        templateName: "healer_assignment",
+        variables: [
+          session.counsellor.name.split(" ")[0],
+          session.client.name,
+          format(parsed.scheduledAt, "dd MMM, HH:mm"),
+        ],
+      })
+      .catch((err) => console.error("[scheduling] counsellor notify WhatsApp failed", err));
+  }
   // Stage transition is best-effort — the session is booked regardless.
   await transitionStage({
     clientId: parsed.clientId,
