@@ -8,6 +8,7 @@ import { transitionStage } from "@/lib/pipeline";
 import { getWhatsAppProvider } from "@/lib/providers/whatsapp";
 import { pickHealer, pickCounsellor } from "@/lib/assignment";
 import { grantReferralReward } from "@/lib/referral";
+import { notifyMany } from "@/lib/notify";
 import { format } from "date-fns";
 import { randomBytes } from "node:crypto";
 
@@ -131,6 +132,20 @@ export async function completeCounseling(input: z.infer<typeof counselingComplet
       variables: [client.name.split(" ")[0]],
     })
     .catch((err) => console.error("[scheduling] visit invitation WhatsApp failed", err));
+  // Notify all coordinators and admins that counselling is done.
+  const coordinators = await prisma.user.findMany({
+    where: { role: { in: ["COORDINATOR", "ADMIN", "SUPER_ADMIN"] } },
+    select: { id: true },
+  });
+  await notifyMany(
+    coordinators.map((u) => u.id),
+    {
+      kind: "OTHER",
+      title: `Counselling done — ${client.name}`,
+      body: `Session with ${client.name} has been completed. Follow up with next steps.`,
+      href: `/leads/${client.id}`,
+    },
+  );
   return session;
 }
 
