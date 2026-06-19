@@ -57,16 +57,35 @@ export async function createLead(input: LeadInput, opts: { silent?: boolean } = 
 
   const existing = await prisma.client.findUnique({ where: { phone } });
   if (existing) {
-    // Don't create duplicates — instead, append a note and return existing.
-    await prisma.client.update({
+    const isLost = existing.stage === "LOST";
+    const updatedClient = await prisma.client.update({
       where: { id: existing.id },
       data: {
+        // If they were lost, treat as a fresh lead — reset to NEW.
+        ...(isLost ? { stage: "NEW" as const } : {}),
         notes: [existing.notes, `Re-enquiry on ${new Date().toISOString()}: ${parsed.issue ?? ""}`]
           .filter(Boolean)
           .join("\n\n"),
       },
     });
-    return { client: existing, created: false };
+    if (isLost) {
+      await prisma.stageTransition.create({
+        data: { clientId: existing.id, fromStage: "LOST", toStage: "NEW", note: "Re-enquiry — reactivated as new lead" },
+      });
+      // Send welcome WhatsApp again for returning lost leads.
+      if (!opts.silent) {
+        getWhatsAppProvider()
+          .sendTemplate({
+            clientId: existing.id,
+            phone,
+            templateName: "lead_welcome",
+            variables: [existing.name.split(" ")[0], "https://crm.lifeenergycentre.in/files/lec-brochure.pdf"],
+          })
+          .catch((err) => console.error("[leads] re-enquiry welcome WhatsApp failed", err));
+      }
+      return { client: updatedClient, created: true };
+    }
+    return { client: updatedClient, created: false };
   }
 
   const client = await prisma.client.create({
