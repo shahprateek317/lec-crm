@@ -58,12 +58,12 @@ export default async function AdminEnrollPage({
   // ── Look up user ──────────────────────────────────────────────────────
   const user = await prisma.user.findUnique({
     where: { email: email.toLowerCase() },
-    select: { id: true, email: true, name: true, role: true, totpSecret: true, totpEnabledAt: true },
+    select: { id: true, email: true, name: true, roles: true, totpSecret: true, totpEnabledAt: true },
   });
 
   if (
     !user ||
-    (user.role !== "ADMIN" && user.role !== "SUPER_ADMIN") ||
+    (!user.roles.includes("ADMIN") && !user.roles.includes("SUPER_ADMIN")) ||
     user.totpEnabledAt
   ) {
     redirect("/sign-in");

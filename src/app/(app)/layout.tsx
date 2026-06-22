@@ -47,8 +47,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const session = await auth();
   if (!session?.user) redirect("/sign-in?callbackUrl=/dashboard");
 
-  const visible = NAV.filter((n) => !n.roles || n.roles.includes(session.user.role));
-  const roleLabel = t.roles[session.user.role as keyof typeof t.roles] ?? session.user.role;
+  const visible = NAV.filter((n) => !n.roles || session.user.roles.some(r => n.roles!.includes(r)));
+  const primaryRole = session.user.roles[0];
+  const roleLabel = t.roles[primaryRole as keyof typeof t.roles] ?? primaryRole;
 
   // Notification bell data — unread count drives the badge; top 10
   // (read + unread) populate the popover. Both queries hit a covering

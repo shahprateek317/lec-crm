@@ -12,7 +12,7 @@ export default async function NewLeadPage({
 }) {
   const sp = await searchParams;
   const staff = await prisma.user.findMany({
-    where: { active: true, role: { in: ["COORDINATOR", "COUNSELLOR"] } },
+    where: { active: true, roles: { hasSome: ["COORDINATOR", "COUNSELLOR"] } },
     orderBy: { name: "asc" },
   });
 

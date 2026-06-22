@@ -36,7 +36,7 @@ function inr(n: number): string {
 export default async function MyEarningsPage() {
   const session = await auth();
   if (!session?.user) redirect("/sign-in?callbackUrl=/my-earnings");
-  if (!HEALER_ROLES.has(session.user.role)) redirect("/dashboard");
+  if (!session.user.roles.some(r => HEALER_ROLES.has(r))) redirect("/dashboard");
 
   const [profile, sessions, payouts] = await Promise.all([
     prisma.healerProfile.findUnique({

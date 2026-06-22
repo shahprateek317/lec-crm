@@ -24,7 +24,7 @@ export const metadata = { title: "Quality" };
 export default async function QualityPage() {
   const session = await auth();
   if (!session?.user) redirect("/sign-in?callbackUrl=/quality");
-  if (!canAuditQuality(session.user.role)) redirect("/dashboard");
+  if (!canAuditQuality(session.user.roles)) redirect("/dashboard");
 
   const since = subDays(startOfDay(new Date()), 30);
 

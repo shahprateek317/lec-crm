@@ -22,7 +22,7 @@ const recordPayoutSchema = z.object({
 
 export async function recordPayoutAction(formData: FormData) {
   const session = await auth();
-  if (!session?.user || !isAdmin(session.user.role)) redirect("/dashboard");
+  if (!session?.user || !isAdmin(session.user.roles)) redirect("/dashboard");
 
   const raw = {
     healerId:   formData.get("healerId"),
@@ -47,8 +47,8 @@ export async function recordPayoutAction(formData: FormData) {
   }
 
   // Verify healerId actually belongs to a healer-role user (prevent IDOR)
-  const healer = await prisma.user.findUnique({ where: { id: healerId }, select: { role: true, name: true } });
-  if (!healer || !["HEALER", "SENIOR_HEALER"].includes(healer.role)) {
+  const healer = await prisma.user.findUnique({ where: { id: healerId }, select: { roles: true, name: true } });
+  if (!healer || !healer.roles.some(r => ["HEALER", "SENIOR_HEALER"].includes(r))) {
     redirect("/settings/payouts?error=Invalid+healer");
   }
 
@@ -68,7 +68,7 @@ export async function recordPayoutAction(formData: FormData) {
 
 export async function deletePayoutAction(formData: FormData) {
   const session = await auth();
-  if (!session?.user || !isAdmin(session.user.role)) redirect("/dashboard");
+  if (!session?.user || !isAdmin(session.user.roles)) redirect("/dashboard");
 
   const id = String(formData.get("id") ?? "");
   if (!id) redirect("/settings/payouts?error=Missing+payout+id");

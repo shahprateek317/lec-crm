@@ -134,7 +134,7 @@ export async function completeCounseling(input: z.infer<typeof counselingComplet
     .catch((err) => console.error("[scheduling] visit invitation WhatsApp failed", err));
   // Notify all coordinators and admins that counselling is done.
   const coordinators = await prisma.user.findMany({
-    where: { role: { in: ["COORDINATOR", "ADMIN", "SUPER_ADMIN"] } },
+    where: { roles: { hasSome: ["COORDINATOR", "ADMIN", "SUPER_ADMIN"] } },
     select: { id: true },
   });
   await notifyMany(

@@ -14,7 +14,7 @@ import type { QualityRating } from "@prisma/client";
 
 async function requireQc() {
   const session = await requireSession();
-  if (!canAuditQuality(session.user.role)) {
+  if (!canAuditQuality(session.user.roles)) {
     redirect("/dashboard?error=forbidden");
   }
   return session;

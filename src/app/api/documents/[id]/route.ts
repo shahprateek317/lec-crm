@@ -29,7 +29,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     return NextResponse.json({ error: "upload_incomplete" }, { status: 409 });
   }
 
-  if (!canViewDocument(doc, { userId: session.user.id, role: session.user.role })) {
+  if (!canViewDocument(doc, { userId: session.user.id, roles: session.user.roles })) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

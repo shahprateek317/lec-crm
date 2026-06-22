@@ -34,21 +34,21 @@ declare module "next-auth" {
   interface Session {
     user: {
       id: string;
-      role: Role;
+      roles: Role[];
     } & DefaultSession["user"];
   }
   interface User {
-    role?: Role;
+    roles?: Role[];
   }
   interface JWT {
-    role?: Role;
+    roles?: Role[];
     uid?: string;
   }
 }
 
 const credentialsSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(0).optional(),
+  password: z.string().min(1),
   totpCode: z.string().optional(),
   preauthToken: z.string().optional(),
 });
@@ -95,7 +95,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // enrollment grace page. This check runs even when totpSecret is
         // already set (enrollment-in-progress) — we never grant a session
         // to an admin without a confirmed second factor.
-        if (user.role === "ADMIN" || user.role === "SUPER_ADMIN") {
+        if (user.roles.includes("ADMIN") || user.roles.includes("SUPER_ADMIN")) {
           if (!user.totpEnabledAt) {
             throw new TotpEnrollmentRequiredError();
           }
@@ -135,7 +135,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }
         }
 
-        return { id: user.id, email: user.email, name: user.name, role: user.role };
+        return { id: user.id, email: user.email, name: user.name, roles: user.roles };
       },
     }),
   ],

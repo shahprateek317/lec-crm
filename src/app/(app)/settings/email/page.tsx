@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+﻿import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, Mail } from "lucide-react";
 import { auth } from "@/lib/auth";
@@ -18,7 +18,7 @@ export default async function EmailSettingsPage({
   searchParams: Promise<{ error?: string; ok?: string }>;
 }) {
   const session = await auth();
-  if (!session?.user || !isAdmin(session.user.role)) redirect("/dashboard");
+  if (!session?.user || !isAdmin(session.user.roles)) redirect("/dashboard");
   await searchParams;
 
   const [provider, apiKey, fromAddress] = await Promise.all([
@@ -50,7 +50,7 @@ export default async function EmailSettingsPage({
 
       <div className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs">
         <span className={`h-2 w-2 rounded-full ${isLive ? "bg-emerald-500" : "bg-amber-400"}`} />
-        {isLive ? "Live — sending via Resend" : "Demo mode — emails logged, not sent"}
+        {isLive ? "Live â€” sending via Resend" : "Demo mode â€” emails logged, not sent"}
       </div>
 
       <Card className="rounded-xl">
@@ -119,9 +119,9 @@ export default async function EmailSettingsPage({
           <p className="font-medium text-foreground">How it works</p>
           <ul className="list-disc list-inside space-y-1 text-xs">
             <li>Every day at <strong>08:00 IST</strong> (02:30 UTC) the server emails each active staff member.</li>
-            <li>Only users with unread notifications receive a digest — no email is sent if there's nothing new.</li>
+            <li>Only users with unread notifications receive a digest â€” no email is sent if there's nothing new.</li>
             <li>After sending, those notifications are marked read so the next digest is fresh.</li>
-            <li>Staff can opt out of individual notification types at <Link href="/settings/notifications" className="underline">Settings → Notifications</Link>.</li>
+            <li>Staff can opt out of individual notification types at <Link href="/settings/notifications" className="underline">Settings â†’ Notifications</Link>.</li>
           </ul>
         </CardContent>
       </Card>

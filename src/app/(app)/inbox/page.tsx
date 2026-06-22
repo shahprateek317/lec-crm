@@ -48,7 +48,7 @@ export default async function InboxPage({
   searchParams: Promise<{ tab?: string }>;
 }) {
   const session = await auth();
-  if (!session?.user || !canUseInbox(session.user.role)) redirect("/dashboard");
+  if (!session?.user || !canUseInbox(session.user.roles)) redirect("/dashboard");
 
   const sp = await searchParams;
   const tab: Tab = (TABS.find((t) => t.key === sp.tab)?.key) ?? "open";

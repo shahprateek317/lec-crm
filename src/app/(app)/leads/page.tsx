@@ -65,7 +65,7 @@ export default async function LeadsPage({
     }),
     prisma.client.groupBy({ by: ["stage"], _count: { _all: true } }),
     prisma.user.findMany({
-      where: { active: true, role: { in: ["COORDINATOR", "COUNSELLOR", "HEALER"] } },
+      where: { active: true, roles: { hasSome: ["COORDINATOR", "COUNSELLOR", "HEALER"] } },
       orderBy: { name: "asc" },
     }),
   ]);

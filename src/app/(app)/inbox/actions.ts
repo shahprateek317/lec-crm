@@ -20,7 +20,7 @@ import { audit } from "@/lib/audit";
 
 async function requireInbox() {
   const session = await requireSession();
-  if (!canUseInbox(session.user.role)) {
+  if (!canUseInbox(session.user.roles)) {
     redirect("/dashboard?error=forbidden");
   }
   return session;

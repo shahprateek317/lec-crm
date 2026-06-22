@@ -34,7 +34,7 @@ const ROLE_PREFIX: Record<Role, string> = {
 async function ensureCode(userId: string, role: Role): Promise<void> {
   const u = await prisma.user.findUnique({ where: { id: userId }, select: { employeeCode: true } });
   if (u?.employeeCode) return;
-  const count = await prisma.user.count({ where: { role } });
+  const count = await prisma.user.count({ where: { roles: { has: role } } });
   await prisma.user.update({
     where: { id: userId },
     data: { employeeCode: `${ROLE_PREFIX[role]}${String(count).padStart(3, "0")}` },
@@ -48,12 +48,12 @@ async function main() {
   // Mobile-friendly credentials for the demo. Short email, no symbols in
   // password. Password is the same across all four so it's easy to remember;
   // roles are differentiated by the email only.
-  const staff: Array<{ email: string; name: string; role: "ADMIN" | "COORDINATOR" | "COUNSELLOR" | "HEALER" | "QUALITY_CONTROLLER"; password: string }> = [
-    { email: "admin@lec.app",       name: "Admin",              role: "ADMIN",              password: "demo1234" },
-    { email: "coordinator@lec.app", name: "Coordinator",        role: "COORDINATOR",        password: "demo1234" },
-    { email: "counsellor@lec.app",  name: "Counsellor",         role: "COUNSELLOR",         password: "demo1234" },
-    { email: "healer@lec.app",      name: "Healer",             role: "HEALER",             password: "demo1234" },
-    { email: "quality@lec.app",     name: "Quality Controller", role: "QUALITY_CONTROLLER", password: "demo1234" },
+  const staff: Array<{ email: string; name: string; roles: Role[]; password: string }> = [
+    { email: "admin@lec.app",       name: "Admin",              roles: ["ADMIN"],              password: "demo1234" },
+    { email: "coordinator@lec.app", name: "Coordinator",        roles: ["COORDINATOR"],        password: "demo1234" },
+    { email: "counsellor@lec.app",  name: "Counsellor",         roles: ["COUNSELLOR"],         password: "demo1234" },
+    { email: "healer@lec.app",      name: "Healer",             roles: ["HEALER"],             password: "demo1234" },
+    { email: "quality@lec.app",     name: "Quality Controller", roles: ["QUALITY_CONTROLLER"], password: "demo1234" },
   ];
   // Fixed TOTP secret used by the demo admin account (admin@lec.app).
   // Smoke scripts generate the live code from this secret with Node crypto
@@ -65,7 +65,7 @@ async function main() {
     const passwordHash = await bcrypt.hash(s.password, 10);
     // Pre-enroll TOTP for admin roles so the TOTP enforcement gate doesn't
     // block demo sign-in. The smoke tests generate codes from DEMO_ADMIN_TOTP_SECRET.
-    const isAdmin = (s.role as string) === "ADMIN" || (s.role as string) === "SUPER_ADMIN";
+    const isAdmin = (s.roles as string[]).includes("ADMIN") || (s.roles as string[]).includes("SUPER_ADMIN");
     const totpData = isAdmin
       ? {
           totpSecret: seedEncrypt(DEMO_ADMIN_TOTP_SECRET),
@@ -74,10 +74,10 @@ async function main() {
       : {};
     const u = await prisma.user.upsert({
       where: { email: s.email },
-      update: { name: s.name, role: s.role, active: true, ...totpData },
-      create: { email: s.email, name: s.name, role: s.role, active: true, passwordHash, ...totpData },
+      update: { name: s.name, roles: s.roles as Role[], active: true, ...totpData },
+      create: { email: s.email, name: s.name, roles: s.roles as Role[], active: true, passwordHash, ...totpData },
     });
-    await ensureCode(u.id, u.role);
+    await ensureCode(u.id, (s.roles as Role[])[0]);
   }
   console.log(`  ✓ ${staff.length} staff accounts (with employee codes)`);
 

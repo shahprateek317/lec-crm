@@ -40,8 +40,8 @@ export async function saveMyProfileAction(formData: FormData) {
   }
   const userId = session.user.id;
 
-  const role = session.user.role;
-  if (role !== "HEALER" && role !== "SENIOR_HEALER") {
+  const roles = session.user.roles;
+  if (!roles.includes("HEALER") && !roles.includes("SENIOR_HEALER")) {
     redirect("/me/profile?error=role_not_supported");
   }
 

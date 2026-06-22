@@ -12,7 +12,7 @@ export const metadata = { title: "Settings" };
 export default async function SettingsPage() {
   const session = await auth();
   if (!session?.user) redirect("/sign-in");
-  if (!isAdmin(session.user.role)) redirect("/dashboard");
+  if (!isAdmin(session.user.roles)) redirect("/dashboard");
 
   const [waProvider, razProvider] = await Promise.all([
     getSettingPreview(SETTING_KEYS.whatsappProvider),

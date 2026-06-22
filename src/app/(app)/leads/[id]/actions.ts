@@ -119,7 +119,7 @@ export async function sendTemplateAction(formData: FormData) {
  */
 export async function softDeleteClientAction(formData: FormData) {
   const session = await requireSession();
-  if (!isAdmin(session.user.role)) {
+  if (!isAdmin(session.user.roles)) {
     redirect(`/leads/${formData.get("clientId") ?? ""}?error=forbidden`);
   }
 

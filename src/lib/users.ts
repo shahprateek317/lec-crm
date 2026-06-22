@@ -70,25 +70,28 @@ export type CreateUserInput = {
   name: string;
   phone?: string;
   whatsappPhone?: string;
-  role: Role;
+  roles: Role[];
   password: string;
 };
 
 export async function createUser(input: CreateUserInput) {
   const passwordHash = await bcrypt.hash(input.password, 10);
-  const code = await nextEmployeeCode(input.role);
+  const primaryRole = input.roles[0];
+  const code = await nextEmployeeCode(primaryRole);
   const user = await prisma.user.create({
     data: {
       email: input.email.toLowerCase(),
       name: input.name,
       phone: input.phone,
       whatsappPhone: input.whatsappPhone,
-      role: input.role,
+      roles: input.roles,
       passwordHash,
       employeeCode: code,
       active: true,
     },
   });
-  await ensureProfile(user.id, user.role);
+  for (const role of user.roles) {
+    await ensureProfile(user.id, role);
+  }
   return user;
 }

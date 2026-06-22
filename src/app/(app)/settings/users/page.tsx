@@ -36,16 +36,16 @@ export default async function StaffPage({
   searchParams: Promise<{ role?: string; error?: string; ok?: string }>;
 }) {
   const session = await auth();
-  if (!session?.user || !isAdmin(session.user.role)) redirect("/dashboard");
+  if (!session?.user || !isAdmin(session.user.roles)) redirect("/dashboard");
   const sp = await searchParams;
 
   const users = await prisma.user.findMany({
     where: sp.role && (ROLE_OPTIONS as readonly string[]).includes(sp.role)
-      ? { role: sp.role as (typeof ROLE_OPTIONS)[number] }
+      ? { roles: { has: sp.role as (typeof ROLE_OPTIONS)[number] } }
       : undefined,
-    orderBy: [{ active: "desc" }, { role: "asc" }, { name: "asc" }],
+    orderBy: [{ active: "desc" }, { name: "asc" }],
     select: {
-      id: true, name: true, email: true, role: true, active: true,
+      id: true, name: true, email: true, roles: true, active: true,
       employeeCode: true, phone: true,
     },
   });
@@ -115,7 +115,8 @@ export default async function StaffPage({
             <p className="p-10 text-center text-sm text-muted-foreground">No staff yet.</p>
           )}
           {users.map((u) => {
-            const tone = ROLE_TONE[u.role] ?? "bg-muted text-muted-foreground";
+            const primaryRole = u.roles[0] ?? "";
+            const tone = ROLE_TONE[primaryRole] ?? "bg-muted text-muted-foreground";
             return (
               <Link
                 key={u.id}
@@ -126,7 +127,7 @@ export default async function StaffPage({
                   <div className="flex items-center gap-2">
                     <p className="truncate font-medium">{u.name}</p>
                     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${tone}`}>
-                      {t.roles[u.role as keyof typeof t.roles] ?? u.role}
+                      {u.roles.map(r => t.roles[r as keyof typeof t.roles] ?? r).join(" + ")}
                     </span>
                     {!u.active && (
                       <span className="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-medium text-rose-900">

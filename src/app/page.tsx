@@ -10,7 +10,7 @@ import { InstallAppPrompt } from "@/components/install-app-prompt";
 export default async function HomePage() {
   const session = await auth();
   if (session?.user) {
-    redirect(landingForRole(session.user.role));
+    redirect(landingForRole(session.user.roles));
   }
 
   return (

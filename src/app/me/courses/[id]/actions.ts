@@ -71,7 +71,7 @@ async function resolveActorUserId(clientId: string): Promise<string> {
   // No assigned coordinator — fall back to any SUPER_ADMIN for the audit record.
   console.warn(`[enrol] client ${clientId} has no coordinator; SUPER_ADMIN used as audit actor`);
   const admin = await prisma.user.findFirst({
-    where: { role: "SUPER_ADMIN" },
+    where: { roles: { has: "SUPER_ADMIN" } },
     select: { id: true },
   });
   if (admin) return admin.id;

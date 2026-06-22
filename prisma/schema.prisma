@@ -103,7 +103,7 @@ model User {
   phone         String?
   whatsappPhone String?
   passwordHash  String
-  role          Role
+  roles         Role[]
   active        Boolean @default(true)
 
   // Phase 2c — TOTP 2FA. Secret is AES-256-GCM encrypted via

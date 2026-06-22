@@ -36,7 +36,7 @@ export default async function LeadDetailPage({
   const { id } = await params;
   const sp = await searchParams;
   const session = await auth();
-  const viewerIsAdmin = !!session?.user && isAdmin(session.user.role);
+  const viewerIsAdmin = !!session?.user && isAdmin(session.user.roles);
 
   const creditBalance = await getCreditBalance(id);
   const [client, staff, templates, counsellings, visits, recentPayments, upcomingHealingSessions, recentHealing] = await Promise.all([
@@ -58,7 +58,7 @@ export default async function LeadDetailPage({
       },
     }),
     prisma.user.findMany({
-      where: { active: true, role: { in: ["COORDINATOR", "COUNSELLOR", "HEALER"] } },
+      where: { active: true, roles: { hasSome: ["COORDINATOR", "COUNSELLOR", "HEALER"] } },
       orderBy: { name: "asc" },
     }),
     prisma.whatsAppTemplate.findMany({

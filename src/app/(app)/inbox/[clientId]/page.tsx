@@ -43,7 +43,7 @@ export default async function InboxThreadPage({
   params: Promise<{ clientId: string }>;
 }) {
   const session = await auth();
-  if (!session?.user || !canUseInbox(session.user.role)) redirect("/dashboard");
+  if (!session?.user || !canUseInbox(session.user.roles)) redirect("/dashboard");
 
   const { clientId } = await params;
 
@@ -78,7 +78,7 @@ export default async function InboxThreadPage({
       select: { id: true, name: true, bodyTemplate: true },
     }),
     prisma.user.findMany({
-      where: { active: true, role: { in: ["COORDINATOR", "COUNSELLOR", "SENIOR_COUNSELLOR"] } },
+      where: { active: true, roles: { hasSome: ["COORDINATOR", "COUNSELLOR", "SENIOR_COUNSELLOR"] } },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),

@@ -57,12 +57,12 @@ export async function confirmAdminEnrollmentAction(
   // ── 2. Look up user ───────────────────────────────────────────────────
   const user = await prisma.user.findUnique({
     where: { email: email.toLowerCase() },
-    select: { id: true, role: true, totpSecret: true, totpEnabledAt: true },
+    select: { id: true, roles: true, totpSecret: true, totpEnabledAt: true },
   });
 
   if (
     !user ||
-    (user.role !== "ADMIN" && user.role !== "SUPER_ADMIN") ||
+    (!user.roles.includes("ADMIN") && !user.roles.includes("SUPER_ADMIN")) ||
     user.totpEnabledAt // already enrolled — token is stale
   ) {
     cookieStore.delete(ENROLLMENT_COOKIE);

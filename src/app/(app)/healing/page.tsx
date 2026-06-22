@@ -28,7 +28,7 @@ export default async function HealingPage({
       },
     }),
     prisma.user.findMany({
-      where: { active: true, role: { in: ["HEALER", "ADMIN"] } },
+      where: { active: true, roles: { hasSome: ["HEALER", "ADMIN"] } },
       orderBy: { name: "asc" },
     }),
   ]);

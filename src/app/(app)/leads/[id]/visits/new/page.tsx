@@ -21,7 +21,7 @@ export default async function ScheduleVisitPage({
   const [client, healers, suggestions] = await Promise.all([
     prisma.client.findUnique({ where: { id }, select: { id: true, name: true } }),
     prisma.user.findMany({
-      where: { active: true, role: { in: ["HEALER", "SENIOR_HEALER", "ADMIN"] } },
+      where: { active: true, roles: { hasSome: ["HEALER", "SENIOR_HEALER", "ADMIN"] } },
       orderBy: { name: "asc" },
     }),
     suggestHealers(id, "IN_PERSON", undefined, 3),

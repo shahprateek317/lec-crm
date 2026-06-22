@@ -20,13 +20,13 @@ function inr(n: number) {
   return `₹${n.toLocaleString("en-IN")}`;
 }
 
-const HEALER_ROLES: Prisma.EnumRoleFilter["in"] = ["HEALER", "SENIOR_HEALER"];
+const HEALER_ROLES = ["HEALER", "SENIOR_HEALER"] as const;
 
 // Typed select so Prisma infers the result shape correctly.
 const healerSelect = {
   id: true,
   name: true,
-  role: true,
+  roles: true,
   healerProfile: {
     select: { perSessionCharge: true, revenueSharePercent: true, acceptsDemoFree: true },
   },
@@ -47,14 +47,14 @@ export default async function PayoutsPage({
   searchParams: Promise<{ healer?: string; error?: string; ok?: string }>;
 }) {
   const session = await auth();
-  if (!session?.user || !isAdmin(session.user.role)) redirect("/dashboard");
+  if (!session?.user || !isAdmin(session.user.roles)) redirect("/dashboard");
 
   const sp = await searchParams;
   const selectedHealerId = sp.healer;
 
   // Load all active healers with their profiles and payouts
   const healers: HealerRow[] = await prisma.user.findMany({
-    where: { role: { in: HEALER_ROLES }, active: true },
+    where: { roles: { hasSome: [...HEALER_ROLES] }, active: true },
     orderBy: { name: "asc" },
     select: healerSelect,
   });
@@ -127,7 +127,7 @@ export default async function PayoutsPage({
                   <tr key={h.id} className="hover:bg-muted/30">
                     <td className="px-3 py-3">
                       <p className="font-medium">{h.name}</p>
-                      <p className="text-[11px] text-muted-foreground">{h.role === "SENIOR_HEALER" ? "Senior healer" : "Healer"}</p>
+                      <p className="text-[11px] text-muted-foreground">{h.roles.includes("SENIOR_HEALER") ? "Senior healer" : "Healer"}</p>
                     </td>
                     <td className="px-3 py-3 text-right tabular-nums">{inr(h.buckets.thisMonth)}</td>
                     <td className="px-3 py-3 text-right tabular-nums">

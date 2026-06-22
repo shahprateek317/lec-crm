@@ -37,7 +37,7 @@ export default async function QualityHealerPage({
   params: Promise<{ id: string }>;
 }) {
   const session = await auth();
-  if (!session?.user || !canAuditQuality(session.user.role)) redirect("/dashboard");
+  if (!session?.user || !canAuditQuality(session.user.roles)) redirect("/dashboard");
   const { id: healerId } = await params;
 
   const since = subDays(startOfDay(new Date()), 30);
@@ -100,7 +100,7 @@ export default async function QualityHealerPage({
       <header>
         <h1 className="font-serif text-2xl font-medium tracking-tight">{healer.name}</h1>
         <p className="text-sm text-muted-foreground">
-          {healer.role.replace(/_/g, " ").toLowerCase()} ·{" "}
+          {healer.roles[0].replace(/_/g, " ").toLowerCase()} ·{" "}
           {healer.email}
           {healer.employeeCode && <> · {healer.employeeCode}</>}
         </p>

@@ -66,15 +66,17 @@ export default async function UserDetailPage({
   searchParams: Promise<{ error?: string; ok?: string }>;
 }) {
   const session = await auth();
-  if (!session?.user || !isAdmin(session.user.role)) redirect("/dashboard");
+  if (!session?.user || !isAdmin(session.user.roles)) redirect("/dashboard");
   const { id } = await params;
   const sp = await searchParams;
 
   const user = await prisma.user.findUnique({ where: { id } });
   if (!user) notFound();
 
-  // Make sure the role profile exists so the form has a row to update.
-  await ensureProfile(user.id, user.role);
+  // Make sure the role profiles exist so the form has rows to update.
+  for (const role of user.roles) {
+    await ensureProfile(user.id, role);
+  }
 
   const [healer, counsellor, coordinator, admin, recentSessions, recentCounsellings] = await Promise.all([
     prisma.healerProfile.findUnique({ where: { userId: id } }),
@@ -95,7 +97,7 @@ export default async function UserDetailPage({
       <header>
         <h1 className="font-serif text-3xl font-medium tracking-tight">{user.name}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {t.roles[user.role as keyof typeof t.roles] ?? user.role}
+          {user.roles.map(r => t.roles[r as keyof typeof t.roles] ?? r).join(" + ")}
           {user.employeeCode ? ` · ${user.employeeCode}` : ""}
           {!user.active && " · INACTIVE"}
         </p>
@@ -127,12 +129,15 @@ export default async function UserDetailPage({
                 <input id="whatsappPhone" name="whatsappPhone" type="tel" defaultValue={user.whatsappPhone ?? ""} className={inputCls} placeholder="If different from phone" />
               </Field>
 
-              <Field id="role" label="Role" required>
-                <select id="role" name="role" defaultValue={user.role} required className={inputCls}>
+              <Field id="roles" label="Roles" required>
+                <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                   {ROLES.map((r) => (
-                    <option key={r} value={r}>{t.roles[r as keyof typeof t.roles]}</option>
+                    <label key={r} className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted/40">
+                      <input type="checkbox" name="roles" value={r} defaultChecked={user.roles.includes(r)} className="h-4 w-4" />
+                      {t.roles[r as keyof typeof t.roles]}
+                    </label>
                   ))}
-                </select>
+                </div>
               </Field>
               <Field id="gender" label="Gender">
                 <select id="gender" name="gender" defaultValue={user.gender ?? ""} className={inputCls}>
@@ -178,7 +183,7 @@ export default async function UserDetailPage({
       </Card>
 
       {/* ── Role-specific profile ── */}
-      {(user.role === "HEALER" || user.role === "SENIOR_HEALER") && healer && (
+      {(user.roles.includes("HEALER") || user.roles.includes("SENIOR_HEALER")) && healer && (
         <Card className="rounded-xl">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">Healer profile</CardTitle>
@@ -282,7 +287,7 @@ export default async function UserDetailPage({
         </Card>
       )}
 
-      {(user.role === "COUNSELLOR" || user.role === "SENIOR_COUNSELLOR") && counsellor && (
+      {(user.roles.includes("COUNSELLOR") || user.roles.includes("SENIOR_COUNSELLOR")) && counsellor && (
         <Card className="rounded-xl">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">Counsellor profile</CardTitle>
@@ -329,7 +334,7 @@ export default async function UserDetailPage({
         </Card>
       )}
 
-      {user.role === "COORDINATOR" && coordinator && (
+      {user.roles.includes("COORDINATOR") && coordinator && (
         <Card className="rounded-xl">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">Coordinator profile</CardTitle>
@@ -366,7 +371,7 @@ export default async function UserDetailPage({
         </Card>
       )}
 
-      {(user.role === "ADMIN" || user.role === "SUPER_ADMIN") && admin && (
+      {(user.roles.includes("ADMIN") || user.roles.includes("SUPER_ADMIN")) && admin && (
         <Card className="rounded-xl">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">Admin permissions</CardTitle>

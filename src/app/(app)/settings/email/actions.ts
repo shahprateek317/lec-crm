@@ -1,4 +1,4 @@
-"use server";
+﻿"use server";
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -15,7 +15,7 @@ const schema = z.object({
 
 export async function saveEmailSettingsAction(formData: FormData) {
   const session = await auth();
-  if (!session?.user || !isAdmin(session.user.role)) redirect("/dashboard");
+  if (!session?.user || !isAdmin(session.user.roles)) redirect("/dashboard");
 
   const parsed = schema.safeParse({
     provider:    formData.get("provider"),
@@ -37,7 +37,7 @@ export async function saveEmailSettingsAction(formData: FormData) {
 
 export async function testEmailAction(formData: FormData) {
   const session = await auth();
-  if (!session?.user || !isAdmin(session.user.role)) redirect("/dashboard");
+  if (!session?.user || !isAdmin(session.user.roles)) redirect("/dashboard");
 
   const to = session.user.email ?? "";
   if (!to) redirect("/settings/email?error=Your+account+has+no+email+address");
@@ -57,7 +57,7 @@ export async function testEmailAction(formData: FormData) {
 
 export async function clearEmailSettingsAction() {
   const session = await auth();
-  if (!session?.user || !isAdmin(session.user.role)) redirect("/dashboard");
+  if (!session?.user || !isAdmin(session.user.roles)) redirect("/dashboard");
 
   await Promise.all([
     clearSetting(SETTING_KEYS.emailApiKey),

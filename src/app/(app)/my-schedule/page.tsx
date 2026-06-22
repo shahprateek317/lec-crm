@@ -35,7 +35,7 @@ export default async function MySchedulePage({
   const session = await auth();
   if (!session?.user) redirect("/sign-in?callbackUrl=/my-schedule");
   const userId = session.user.id;
-  const role = session.user.role;
+  const roles = session.user.roles;
   const sp = await searchParams;
   const days = Math.max(1, Math.min(30, Number(sp.days) || 7));
 
@@ -193,9 +193,9 @@ export default async function MySchedulePage({
               icon={<CalendarDays className="h-5 w-5" />}
               title="Nothing on your calendar"
               description={
-                role === "HEALER" || role === "SENIOR_HEALER"
+                roles.some(r => r === "HEALER" || r === "SENIOR_HEALER")
                   ? "Once a coordinator schedules a visit or healing for you, it shows up here."
-                  : role === "COUNSELLOR" || role === "SENIOR_COUNSELLOR"
+                  : roles.some(r => r === "COUNSELLOR" || r === "SENIOR_COUNSELLOR")
                     ? "When a coordinator books a counselling with you, it shows up here."
                     : "No sessions in this window."
               }

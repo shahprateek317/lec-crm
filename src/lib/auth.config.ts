@@ -14,15 +14,15 @@ export const authConfig = {
     async jwt({ token, user }) {
       if (user) {
         (token as { uid?: string }).uid = user.id;
-        (token as { role?: Role }).role = (user as { role?: Role }).role;
+        (token as { roles?: Role[] }).roles = (user as { roles?: Role[] }).roles;
       }
       return token;
     },
     async session({ session, token }) {
-      const t = token as { uid?: string; role?: Role };
+      const t = token as { uid?: string; roles?: Role[] };
       if (t.uid && session.user) {
         session.user.id = t.uid;
-        session.user.role = t.role ?? "COORDINATOR";
+        session.user.roles = t.roles ?? ["COORDINATOR"];
       }
       return session;
     },

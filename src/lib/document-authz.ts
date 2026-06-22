@@ -27,9 +27,9 @@ export const ELEVATED_ROLES = new Set([
  */
 export function canViewDocument(
   doc: { ownerUserId: string | null; ownerClientId: string | null },
-  session: { userId: string; role: string },
+  session: { userId: string; roles: string[] },
 ): boolean {
   const isOwner = !!doc.ownerUserId && doc.ownerUserId === session.userId;
-  const isElevated = ELEVATED_ROLES.has(session.role);
+  const isElevated = session.roles.some(r => ELEVATED_ROLES.has(r));
   return isOwner || isElevated;
 }

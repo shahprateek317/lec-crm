@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+﻿import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, MessagesSquare, ExternalLink } from "lucide-react";
 import { headers } from "next/headers";
@@ -19,7 +19,7 @@ export default async function WhatsAppSettingsPage({
   searchParams: Promise<{ error?: string; ok?: string; test?: string }>;
 }) {
   const session = await auth();
-  if (!session?.user || !isAdmin(session.user.role)) redirect("/dashboard");
+  if (!session?.user || !isAdmin(session.user.roles)) redirect("/dashboard");
   const sp = await searchParams;
 
   const [provider, phoneId, token, verifyToken, appSecret] = await Promise.all([
@@ -60,7 +60,7 @@ export default async function WhatsAppSettingsPage({
       <div className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs">
         <span className={`inline-block h-2 w-2 rounded-full ${isLive ? "bg-emerald-500" : "bg-amber-500"}`} />
         <span className="font-medium">
-          {isLive ? "Live — sending real WhatsApp messages" : "Demo mode — messages logged only, not sent"}
+          {isLive ? "Live â€” sending real WhatsApp messages" : "Demo mode â€” messages logged only, not sent"}
         </span>
       </div>
 
@@ -69,21 +69,21 @@ export default async function WhatsAppSettingsPage({
       <Card className="rounded-xl">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium text-muted-foreground">
-            Step 1 — Set up Meta Business (one-time)
+            Step 1 â€” Set up Meta Business (one-time)
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <ol className="list-decimal space-y-2 pl-5">
             <li>Verify your centre at <a className="text-primary hover:underline" href="https://business.facebook.com" target="_blank" rel="noreferrer">business.facebook.com</a> (PAN / GST / registration doc).</li>
-            <li>At <a className="text-primary hover:underline" href="https://developers.facebook.com" target="_blank" rel="noreferrer">developers.facebook.com</a>, create an App → add the WhatsApp Business product.</li>
+            <li>At <a className="text-primary hover:underline" href="https://developers.facebook.com" target="_blank" rel="noreferrer">developers.facebook.com</a>, create an App â†’ add the WhatsApp Business product.</li>
             <li>Register a new phone number for the API (can&apos;t be used on the regular WhatsApp app at the same time).</li>
-            <li>Submit the message templates for approval — you&apos;ll find them in the admin&apos;s <em>Settings → Templates</em> section (each is a UTILITY template, approval is usually 24 hours).</li>
+            <li>Submit the message templates for approval â€” you&apos;ll find them in the admin&apos;s <em>Settings â†’ Templates</em> section (each is a UTILITY template, approval is usually 24 hours).</li>
             <li>In System Users, generate a <strong>permanent access token</strong> with <code>whatsapp_business_messaging</code> and <code>whatsapp_business_management</code> scopes.</li>
           </ol>
           <p className="text-xs text-muted-foreground">
             Full Meta documentation:{" "}
             <a className="text-primary hover:underline" href="https://developers.facebook.com/docs/whatsapp/cloud-api/get-started" target="_blank" rel="noreferrer">
-              Cloud API — Get Started <ExternalLink className="inline h-3 w-3" />
+              Cloud API â€” Get Started <ExternalLink className="inline h-3 w-3" />
             </a>
           </p>
         </CardContent>
@@ -92,12 +92,12 @@ export default async function WhatsAppSettingsPage({
       <Card className="rounded-xl">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium text-muted-foreground">
-            Step 2 — Point Meta to this app&apos;s webhook
+            Step 2 â€” Point Meta to this app&apos;s webhook
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <p>
-            In the Meta App → WhatsApp → Configuration, paste the URL and Verify Token below.
+            In the Meta App â†’ WhatsApp â†’ Configuration, paste the URL and Verify Token below.
             Subscribe to fields: <code>messages</code>, <code>message_status</code>.
           </p>
 
@@ -110,11 +110,11 @@ export default async function WhatsAppSettingsPage({
             <div className="flex-1 space-y-1.5">
               <p className="text-xs font-medium text-muted-foreground">Verify Token</p>
               <code className="block rounded-md bg-muted px-3 py-2 text-xs">
-                {verifyToken.isSet ? verifyToken.preview : "(not set — click Generate)"}
+                {verifyToken.isSet ? verifyToken.preview : "(not set â€” click Generate)"}
               </code>
             </div>
             <SubmitButton
-              pendingLabel="Generating…"
+              pendingLabel="Generatingâ€¦"
               className="h-10 rounded-md border border-border bg-card px-3 text-xs font-medium hover:bg-muted"
             >
               Generate new
@@ -130,7 +130,7 @@ export default async function WhatsAppSettingsPage({
       <Card className="rounded-xl">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium text-muted-foreground">
-            Step 3 — Paste your credentials + go live
+            Step 3 â€” Paste your credentials + go live
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -153,7 +153,7 @@ export default async function WhatsAppSettingsPage({
                   className={inputCls}
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  Find in Meta → WhatsApp → API Setup.
+                  Find in Meta â†’ WhatsApp â†’ API Setup.
                 </p>
               </div>
 
@@ -163,7 +163,7 @@ export default async function WhatsAppSettingsPage({
                   id="accessToken"
                   name="accessToken"
                   type="password"
-                  placeholder={token.isSet ? token.preview : "EAAxxxx…"}
+                  placeholder={token.isSet ? token.preview : "EAAxxxxâ€¦"}
                   className={inputCls}
                   autoComplete="off"
                 />
@@ -180,7 +180,7 @@ export default async function WhatsAppSettingsPage({
                   id="appSecret"
                   name="appSecret"
                   type="password"
-                  placeholder={appSecret.isSet ? appSecret.preview : "Find in Meta App → Settings → Basic"}
+                  placeholder={appSecret.isSet ? appSecret.preview : "Find in Meta App â†’ Settings â†’ Basic"}
                   className={inputCls}
                   autoComplete="off"
                 />
@@ -194,14 +194,14 @@ export default async function WhatsAppSettingsPage({
 
             <div className="flex flex-wrap items-center gap-3">
               <SubmitButton
-                pendingLabel="Saving…"
+                pendingLabel="Savingâ€¦"
                 className="h-10 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
               >
                 Save
               </SubmitButton>
               <SubmitButton
                 formAction={testWhatsAppAction}
-                pendingLabel="Testing…"
+                pendingLabel="Testingâ€¦"
                 className="h-10 rounded-lg border border-border bg-card px-4 text-sm font-medium hover:bg-muted"
               >
                 Test connection
