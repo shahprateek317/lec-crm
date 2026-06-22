@@ -24,15 +24,12 @@ export function ChipMultiSelect({
   columns?: 2 | 3 | 4;
   ariaLabel?: string;
 }) {
-  const [selected, setSelected] = useState<Set<string>>(() => new Set(defaultSelected));
+  const [selected, setSelected] = useState<string[]>(() => [...defaultSelected]);
 
   const toggle = (v: string) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(v)) next.delete(v);
-      else next.add(v);
-      return next;
-    });
+    setSelected((prev) =>
+      prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]
+    );
 
   return (
     <div role="group" aria-label={ariaLabel}>
@@ -45,7 +42,7 @@ export function ChipMultiSelect({
         )}
       >
         {options.map((o) => {
-          const on = selected.has(o.value);
+          const on = selected.includes(o.value);
           return (
             <button
               key={o.value}
@@ -65,7 +62,7 @@ export function ChipMultiSelect({
           );
         })}
       </div>
-      {Array.from(selected).map((v) => (
+      {selected.map((v) => (
         <input key={v} type="hidden" name={name} value={v} />
       ))}
     </div>
