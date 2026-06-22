@@ -230,21 +230,21 @@ model HealerProfile {
 // `period` is "YYYY-MM" (e.g. "2026-06"). One payout per healer per period.
 
 model HealerPayout {
-  id         String   @id @default(cuid())
-  healerId   String
-  healer     User     @relation("HealerPayouts", fields: [healerId], references: [id], onDelete: Cascade)
+  id          String @id @default(cuid())
+  healerId    String
+  healer      User   @relation("HealerPayouts", fields: [healerId], references: [id], onDelete: Cascade)
   createdById String
-  createdBy   User    @relation("PayoutsCreated", fields: [createdById], references: [id])
+  createdBy   User   @relation("PayoutsCreated", fields: [createdById], references: [id])
 
-  period     String   // "YYYY-MM"
-  gross      Int      // earnings snapshot (₹)
+  period     String // "YYYY-MM"
+  gross      Int // earnings snapshot (₹)
   deductions Int      @default(0)
-  net        Int      // gross - deductions, enforced in server action
+  net        Int // gross - deductions, enforced in server action
   paidAt     DateTime
   paymentRef String?
   notes      String?
 
-  createdAt  DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@unique([healerId, period])
 }
@@ -550,9 +550,13 @@ model Visit {
   assignedHealerId String?
   assignedHealer   User?     @relation(fields: [assignedHealerId], references: [id])
   scheduledAt      DateTime
-  visitedAt        DateTime?
-  initialFeedback  String?
-  notes            String?
+  visitedAt           DateTime?
+  problemsDiscussed   String?
+  healingExplained    String?
+  demoHealingDone     Boolean   @default(false)
+  demoHealingNotes    String?
+  initialFeedback     String?
+  notes               String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -686,7 +690,7 @@ model HealingSession {
   // Advance scheduling — set when a coordinator books a future session.
   // NULL means the session was logged after-the-fact (legacy behaviour).
   scheduledAt DateTime?
-  meetLink    String?   // Jitsi URL for distant sessions only
+  meetLink    String? // Jitsi URL for distant sessions only
 
   // Phase 2b — set by the pre-session reminder cron after a successful
   // 1-hour WhatsApp ping. NULL = "never sent" so the cron can dedupe.
@@ -1192,11 +1196,11 @@ model Notification {
 // writing to the Notification table.
 
 model NotificationPreference {
-  id        String           @id @default(cuid())
-  userId    String
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  kind      NotificationKind
-  enabled   Boolean          @default(true)
+  id      String           @id @default(cuid())
+  userId  String
+  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind    NotificationKind
+  enabled Boolean          @default(true)
 
   @@unique([userId, kind])
 }
@@ -1211,7 +1215,7 @@ model UserBackupCode {
   id        String    @id @default(cuid())
   userId    String
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  codeHash  String    // SHA-256(plaintext) — never store plaintext
+  codeHash  String // SHA-256(plaintext) — never store plaintext
   usedAt    DateTime?
   createdAt DateTime  @default(now())
 

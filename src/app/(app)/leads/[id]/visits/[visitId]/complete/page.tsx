@@ -48,23 +48,69 @@ export default async function CompleteVisitPage({
         <input type="hidden" name="visitId" value={visit.id} />
         <input type="hidden" name="clientId" value={visit.clientId} />
 
-        <Field id="initialFeedback" label="Initial feedback from the client">
+        <Field id="problemsDiscussed" label="Problems & concerns discussed" required>
           <textarea
-            id="initialFeedback"
-            name="initialFeedback"
-            rows={4}
-            className={`${inputCls} min-h-24 resize-y py-2`}
-            placeholder="How did they feel after the session?"
+            id="problemsDiscussed"
+            name="problemsDiscussed"
+            rows={5}
+            required
+            className={`${inputCls} min-h-28 resize-y py-2`}
+            placeholder="Describe the client's health issues, concerns, and background discussed during the visit…"
           />
         </Field>
 
-        <Field id="notes" label="Internal notes">
+        <Field id="healingExplained" label="Pranic healing information shared">
+          <textarea
+            id="healingExplained"
+            name="healingExplained"
+            rows={3}
+            className={`${inputCls} min-h-20 resize-y py-2`}
+            placeholder="What was explained about pranic healing — how it works, benefits, process…"
+          />
+        </Field>
+
+        <div className="space-y-3 rounded-lg border border-border p-4">
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              id="demoHealingDone"
+              name="demoHealingDone"
+              value="true"
+              className="h-4 w-4 rounded border-input accent-primary"
+            />
+            <label htmlFor="demoHealingDone" className="text-sm font-medium">
+              Free / demo healing was given during this visit
+            </label>
+          </div>
+
+          <Field id="demoHealingNotes" label="Demo healing details">
+            <textarea
+              id="demoHealingNotes"
+              name="demoHealingNotes"
+              rows={3}
+              className={`${inputCls} min-h-20 resize-y py-2`}
+              placeholder="What was done — type of healing, chakras treated, duration, client response…"
+            />
+          </Field>
+        </div>
+
+        <Field id="initialFeedback" label="Client's feedback after the session">
+          <textarea
+            id="initialFeedback"
+            name="initialFeedback"
+            rows={3}
+            className={`${inputCls} min-h-20 resize-y py-2`}
+            placeholder="How did they feel? Any immediate response or comments?"
+          />
+        </Field>
+
+        <Field id="notes" label="Internal notes (staff only)">
           <textarea
             id="notes"
             name="notes"
             rows={3}
             className={`${inputCls} min-h-20 resize-y py-2`}
-            placeholder="Private observations for staff."
+            placeholder="Private observations — not visible to client."
           />
         </Field>
 

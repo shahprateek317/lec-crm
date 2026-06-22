@@ -293,6 +293,10 @@ export async function scheduleVisit(input: z.infer<typeof visitScheduleSchema>) 
 
 export const visitCompleteSchema = z.object({
   visitId: z.string().min(1),
+  problemsDiscussed: z.string().max(10000).optional(),
+  healingExplained: z.string().max(5000).optional(),
+  demoHealingDone: z.boolean().optional(),
+  demoHealingNotes: z.string().max(5000).optional(),
   initialFeedback: z.string().max(5000).optional(),
   notes: z.string().max(5000).optional(),
   byUserId: z.string().min(1),
@@ -304,6 +308,10 @@ export async function completeVisit(input: z.infer<typeof visitCompleteSchema>) 
     where: { id: parsed.visitId },
     data: {
       visitedAt: new Date(),
+      problemsDiscussed: parsed.problemsDiscussed,
+      healingExplained: parsed.healingExplained,
+      demoHealingDone: parsed.demoHealingDone ?? false,
+      demoHealingNotes: parsed.demoHealingNotes,
       initialFeedback: parsed.initialFeedback,
       notes: parsed.notes,
     },
