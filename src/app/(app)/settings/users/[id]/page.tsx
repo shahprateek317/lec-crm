@@ -8,6 +8,7 @@ import { ensureProfile } from "@/lib/users";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AvailabilityGrid } from "@/components/availability-grid";
 import { ChipMultiSelect } from "@/components/chip-multi-select";
+import { DeleteUserButton } from "@/components/delete-user-button";
 import { TagInput } from "@/components/tag-input";
 import { FlashToaster } from "@/components/flash-toaster";
 import { t } from "@/lib/i18n";
@@ -458,12 +459,7 @@ export default async function UserDetailPage({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <form action={deleteUserAction} onSubmit={(e) => { if (!confirm(`Permanently delete ${user.name}? This cannot be undone.`)) e.preventDefault(); }}>
-            <input type="hidden" name="id" value={user.id} />
-            <button type="submit" className="inline-flex h-10 items-center rounded-md border border-destructive/50 bg-destructive/10 px-3 text-sm font-medium text-destructive hover:bg-destructive/20">
-              Delete this account
-            </button>
-          </form>
+          <DeleteUserButton id={user.id} name={user.name} action={deleteUserAction} />
           <p className="mt-2 text-xs text-muted-foreground">
             Permanently removes the account. Only use for duplicates or test accounts with no history.
           </p>
