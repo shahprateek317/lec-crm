@@ -131,14 +131,11 @@ export default async function UserDetailPage({
               </Field>
 
               <Field id="roles" label="Roles" required>
-                <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-                  {ROLES.map((r) => (
-                    <label key={r} className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted/40">
-                      <input type="checkbox" name="roles" value={r} defaultChecked={user.roles.includes(r)} className="h-4 w-4" />
-                      {t.roles[r as keyof typeof t.roles]}
-                    </label>
-                  ))}
-                </div>
+                <ChipMultiSelect
+                  name="roles"
+                  options={ROLES.map((r) => ({ value: r, label: t.roles[r as keyof typeof t.roles] ?? r }))}
+                  defaultSelected={user.roles}
+                />
               </Field>
               <Field id="gender" label="Gender">
                 <select id="gender" name="gender" defaultValue={user.gender ?? ""} className={inputCls}>
