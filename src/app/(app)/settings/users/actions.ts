@@ -318,12 +318,11 @@ export async function deleteUserAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Missing user id");
 
-  // Remove dependent records before deleting (for duplicate/test accounts only)
+  // Remove non-cascade dependent records before deleting
   await prisma.$transaction([
     prisma.counselingSession.deleteMany({ where: { counsellorId: id } }),
     prisma.visit.updateMany({ where: { assignedHealerId: id }, data: { assignedHealerId: null } }),
     prisma.healingSession.deleteMany({ where: { healerId: id } }),
-    prisma.notification.deleteMany({ where: { userId: id } }),
   ]);
 
   await prisma.user.delete({ where: { id } });
