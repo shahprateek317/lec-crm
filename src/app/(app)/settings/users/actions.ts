@@ -311,3 +311,13 @@ export async function resetPasswordAction(formData: FormData) {
   revalidatePath(`/settings/users/${id}`);
   redirect(`/settings/users/${id}?ok=1`);
 }
+
+// ── Delete user ───────────────────────────────────────────────────────
+export async function deleteUserAction(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  if (!id) throw new Error("Missing user id");
+  await prisma.user.delete({ where: { id } });
+  revalidatePath("/settings/users");
+  redirect("/settings/users?ok=deleted");
+}
