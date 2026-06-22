@@ -317,6 +317,16 @@ export async function deleteUserAction(formData: FormData) {
   await requireAdmin();
   const id = String(formData.get("id") ?? "");
   if (!id) throw new Error("Missing user id");
+
+  // Remove dependent records before deleting (for duplicate/test accounts only)
+  await prisma.$transaction([
+    prisma.counselingSession.deleteMany({ where: { counsellorId: id } }),
+    prisma.visit.deleteMany({ where: { healerId: id } }),
+    prisma.healingSession.deleteMany({ where: { healerId: id } }),
+    prisma.leadAssignment.deleteMany({ where: { staffId: id } }),
+    prisma.notification.deleteMany({ where: { userId: id } }),
+  ]);
+
   await prisma.user.delete({ where: { id } });
   revalidatePath("/settings/users");
   redirect("/settings/users?ok=deleted");
