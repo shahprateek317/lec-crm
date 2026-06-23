@@ -256,9 +256,17 @@ export default async function LeadDetailPage({
                       </li>
                     ))}
                     {visits.filter((v) => v.visitedAt).map((v) => (
-                      <li key={v.id} className="flex items-center gap-2">
-                        <CheckCircle2 className="h-3 w-3 text-emerald-600" />
-                        Visit — {format(v.visitedAt!, "dd MMM yyyy")}
+                      <li key={v.id} className="flex items-center justify-between gap-2">
+                        <span className="flex items-center gap-2">
+                          <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                          Visit — {format(v.visitedAt!, "dd MMM yyyy")}
+                        </span>
+                        <Link
+                          href={`/leads/${client.id}/visits/${v.id}/edit`}
+                          className="text-primary hover:underline"
+                        >
+                          Edit details
+                        </Link>
                       </li>
                     ))}
                   </ul>
