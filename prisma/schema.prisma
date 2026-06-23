@@ -554,6 +554,8 @@ model Visit {
   problemsDiscussed   String?
   healingExplained    String?
   demoHealingDone     Boolean   @default(false)
+  demoChakrasBefore   Json?
+  demoChakrasAfter    Json?
   demoHealingNotes    String?
   initialFeedback     String?
   notes               String?

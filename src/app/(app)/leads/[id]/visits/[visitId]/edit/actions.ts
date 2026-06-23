@@ -17,6 +17,8 @@ export async function updateVisitDetailsAction(formData: FormData) {
       problemsDiscussed: String(formData.get("problemsDiscussed") ?? "") || null,
       healingExplained: String(formData.get("healingExplained") ?? "") || null,
       demoHealingDone: formData.get("demoHealingDone") === "true",
+      demoChakrasBefore: formData.get("demoChakrasBefore") ? JSON.parse(String(formData.get("demoChakrasBefore"))) : null,
+      demoChakrasAfter: formData.get("demoChakrasAfter") ? JSON.parse(String(formData.get("demoChakrasAfter"))) : null,
       demoHealingNotes: String(formData.get("demoHealingNotes") ?? "") || null,
       initialFeedback: String(formData.get("initialFeedback") ?? "") || null,
       notes: String(formData.get("notes") ?? "") || null,

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { format } from "date-fns";
 import { prisma } from "@/lib/prisma";
+import { DemoHealingSection } from "@/components/healing/demo-healing-section";
 import { completeVisitAction } from "./actions";
 
 export const metadata = { title: "Complete visit" };
@@ -69,30 +70,7 @@ export default async function CompleteVisitPage({
           />
         </Field>
 
-        <div className="space-y-3 rounded-lg border border-border p-4">
-          <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              id="demoHealingDone"
-              name="demoHealingDone"
-              value="true"
-              className="h-4 w-4 rounded border-input accent-primary"
-            />
-            <label htmlFor="demoHealingDone" className="text-sm font-medium">
-              Free / demo healing was given during this visit
-            </label>
-          </div>
-
-          <Field id="demoHealingNotes" label="Demo healing details">
-            <textarea
-              id="demoHealingNotes"
-              name="demoHealingNotes"
-              rows={3}
-              className={`${inputCls} min-h-20 resize-y py-2`}
-              placeholder="What was done — type of healing, chakras treated, duration, client response…"
-            />
-          </Field>
-        </div>
+        <DemoHealingSection />
 
         <Field id="initialFeedback" label="Client's feedback after the session">
           <textarea
