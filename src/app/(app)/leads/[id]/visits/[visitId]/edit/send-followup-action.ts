@@ -12,7 +12,7 @@ export async function sendVisitFollowupAction(formData: FormData) {
 
   const visit = await prisma.visit.findUnique({
     where: { id: visitId },
-    include: { client: { select: { name: true, phone: true, whatsappPhone: true } } },
+    include: { client: { select: { name: true, phone: true } } },
   });
   if (!visit) throw new Error("Visit not found");
 
@@ -27,7 +27,7 @@ export async function sendVisitFollowupAction(formData: FormData) {
 
   const nextSteps = steps.length > 0 ? steps.join("\n") : "Please contact us to discuss the best next step for you.";
   const firstName = visit.client.name.split(" ")[0];
-  const phone = visit.client.whatsappPhone ?? visit.client.phone;
+  const phone = visit.client.phone;
 
   if (phone) {
     await getWhatsAppProvider()
