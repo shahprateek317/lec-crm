@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { parseChakraStates } from "@/lib/healing";
 import { DemoHealingSection } from "@/components/healing/demo-healing-section";
 import { updateVisitDetailsAction } from "./actions";
+import { sendVisitFollowupAction } from "./send-followup-action";
 
 export const metadata = { title: "Edit visit details" };
 
@@ -111,6 +112,46 @@ export default async function EditVisitPage({
           </Link>
         </div>
       </form>
+
+      {/* ── WhatsApp follow-up ── */}
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4">
+        <div>
+          <h2 className="text-sm font-semibold">Send follow-up WhatsApp to {visit.client.name}</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Select the recommended next steps — a personalised message will be sent via WhatsApp.
+          </p>
+        </div>
+
+        <form action={sendVisitFollowupAction} className="space-y-4">
+          <input type="hidden" name="visitId" value={visit.id} />
+          <input type="hidden" name="clientId" value={visit.clientId} />
+
+          <div className="space-y-2">
+            {[
+              { name: "step_demo", label: "Further demo pranic healing session" },
+              { name: "step_meditation", label: "Join our meditation group" },
+              { name: "step_counselling", label: "Counselling session with our counsellor" },
+              { name: "step_paid", label: "Full paid healing package" },
+            ].map((s) => (
+              <label key={s.name} className="flex items-center gap-2.5 cursor-pointer text-sm">
+                <input type="checkbox" name={s.name} value="1" defaultChecked={s.name === "step_demo"} className="h-4 w-4 rounded accent-primary" />
+                {s.label}
+              </label>
+            ))}
+          </div>
+
+          <Field id="step_custom" label="Additional recommendation (optional)">
+            <input id="step_custom" name="step_custom" className={inputCls} placeholder="e.g. Distant healing, home visit…" />
+          </Field>
+
+          <button
+            type="submit"
+            className="inline-flex h-10 items-center gap-2 rounded-lg bg-emerald-600 px-5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-emerald-700"
+          >
+            📲 Send WhatsApp follow-up
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
