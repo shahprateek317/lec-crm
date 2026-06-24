@@ -104,6 +104,8 @@ export async function createLead(input: LeadInput, opts: { silent?: boolean } = 
       preferredTimeSlot: parsed.preferredTimeSlot,
       source: parsed.source as LeadSource,
       stage: "NEW" as PipelineStage,
+      currentAction: "BROCHURE_SENT",
+      leadStatus: "ACTIVE",
       assignedToId: parsed.assignedToId,
       notes: parsed.notes,
       stageTransitions: {

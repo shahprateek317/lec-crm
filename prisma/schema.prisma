@@ -18,6 +18,37 @@ datasource db {
 // Auth / Users
 // ──────────────────────────────────────────────────────────────────────────
 
+enum ActionType {
+  BROCHURE_SENT
+  COUNSELING
+  CENTER_VISIT_DEMO_HEALING
+  INTRO_PRANIC_HEALING_GROUP
+  MEDITATION_GROUP
+  TELEPHONIC_CALL
+  PAID_HEALING
+  COURSE_ENROLLMENT
+  NOT_INTERESTED
+}
+
+enum LeadStatus {
+  ACTIVE
+  DORMANT
+  NOT_INTERESTED
+  CONVERTED
+}
+
+enum AttendanceStatus {
+  REGISTERED
+  ATTENDED
+  DID_NOT_ATTEND
+}
+
+enum MeditationMemberStatus {
+  ACTIVE
+  INACTIVE
+  EXITED
+}
+
 enum Role {
   SUPER_ADMIN
   ADMIN
@@ -463,6 +494,11 @@ model Client {
   leadScore              Int                @default(0) // computed nudge for prioritisation
   source                 LeadSource         @default(MANUAL)
   stage                  PipelineStage      @default(NEW)
+  leadStatus             LeadStatus         @default(ACTIVE)
+  currentAction          ActionType?
+  nextAction             ActionType?
+  nextActionDate         DateTime?
+  actionRemarks          String?
   assignedToId           String?
   assignedTo             User?              @relation("AssignedCoordinator", fields: [assignedToId], references: [id])
   notes                  String?
@@ -498,12 +534,56 @@ model Client {
   whatsappThread           WhatsAppThread?
   magicLinks               ClientMagicLink[]
   portalSessions           ClientSession[]
+  pranicGroupAttendances   PranicGroupAttendance[]
+  meditationMembership     MeditationGroupMembership?
 
   @@index([stage])
   @@index([assignedToId])
   @@index([createdAt])
   @@index([referrerClientId])
   @@index([deletedAt])
+}
+
+// ── Introduction to Pranic Healing Group ────────────────────────────────────
+model PranicGroupSession {
+  id          String   @id @default(cuid())
+  scheduledAt DateTime
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  attendances PranicGroupAttendance[]
+}
+
+model PranicGroupAttendance {
+  id        String           @id @default(cuid())
+  sessionId String
+  session   PranicGroupSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  clientId  String
+  client    Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  status    AttendanceStatus @default(REGISTERED)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([sessionId, clientId])
+  @@index([clientId])
+}
+
+// ── Meditation Group ─────────────────────────────────────────────────────────
+model MeditationGroupMembership {
+  id              String                 @id @default(cuid())
+  clientId        String                 @unique
+  client          Client                 @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  joinedAt        DateTime               @default(now())
+  attendanceCount Int                    @default(0)
+  lastAttendedAt  DateTime?
+  status          MeditationMemberStatus @default(ACTIVE)
+  exitedAt        DateTime?
+  notes           String?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  @@index([status])
 }
 
 model StageTransition {

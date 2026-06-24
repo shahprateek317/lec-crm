@@ -17,6 +17,26 @@ import {
   sendTemplateAction,
   softDeleteClientAction,
 } from "./actions";
+import { updateActionPlanAction } from "./action-plan/actions";
+
+const ACTION_LABELS: Record<string, string> = {
+  BROCHURE_SENT: "Brochure Sent",
+  COUNSELING: "Counseling",
+  CENTER_VISIT_DEMO_HEALING: "Center Visit with Demo Healing",
+  INTRO_PRANIC_HEALING_GROUP: "Introduction to Pranic Healing Group",
+  MEDITATION_GROUP: "Meditation Group",
+  TELEPHONIC_CALL: "Telephonic Call",
+  PAID_HEALING: "Paid Healing",
+  COURSE_ENROLLMENT: "Course Enrollment",
+  NOT_INTERESTED: "Not Interested",
+};
+
+const STATUS_TONE: Record<string, string> = {
+  ACTIVE: "bg-emerald-100 text-emerald-800",
+  DORMANT: "bg-amber-100 text-amber-800",
+  NOT_INTERESTED: "bg-rose-100 text-rose-800",
+  CONVERTED: "bg-purple-100 text-purple-800",
+};
 
 export const dynamic = "force-dynamic";
 
@@ -132,15 +152,88 @@ export default async function LeadDetailPage({
 
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <h1 className="font-serif text-3xl font-medium tracking-tight">{client.name}</h1>
             <StageBadge stage={client.stage} />
+            {client.leadStatus && (
+              <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_TONE[client.leadStatus] ?? "bg-muted text-muted-foreground"}`}>
+                {client.leadStatus.replace("_", " ")}
+              </span>
+            )}
+            {client.nextAction && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">
+                Next: {ACTION_LABELS[client.nextAction] ?? client.nextAction}
+                {client.nextActionDate && ` · ${format(client.nextActionDate, "dd MMM")}`}
+              </span>
+            )}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             Added {formatDistanceToNow(client.createdAt, { addSuffix: true })} · Source: {client.source.toLowerCase().replace("_", " ")}
           </p>
         </div>
       </header>
+
+      {/* ── Action Plan ── */}
+      <Card className="rounded-xl border-primary/20 bg-primary/5">
+        <CardContent className="p-4">
+          <form action={updateActionPlanAction} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <input type="hidden" name="clientId" value={client.id} />
+
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Current Action</p>
+              <select name="currentAction" defaultValue={client.currentAction ?? ""} className={selectCls}>
+                <option value="">— None —</option>
+                {Object.entries(ACTION_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Next Action</p>
+              <select name="nextAction" defaultValue={client.nextAction ?? ""} className={selectCls}>
+                <option value="">— None —</option>
+                {Object.entries(ACTION_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Next Action Date</p>
+              <input
+                type="date"
+                name="nextActionDate"
+                defaultValue={client.nextActionDate ? format(client.nextActionDate, "yyyy-MM-dd") : ""}
+                className={selectCls}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Lead Status</p>
+              <select name="leadStatus" defaultValue={client.leadStatus ?? "ACTIVE"} className={selectCls}>
+                <option value="ACTIVE">Active</option>
+                <option value="DORMANT">Dormant</option>
+                <option value="NOT_INTERESTED">Not Interested</option>
+                <option value="CONVERTED">Converted</option>
+              </select>
+            </div>
+
+            <div className="space-y-1 sm:col-span-2 lg:col-span-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Remarks</p>
+              <input
+                type="text"
+                name="actionRemarks"
+                defaultValue={client.actionRemarks ?? ""}
+                placeholder="Notes on current situation or plan…"
+                className={selectCls}
+              />
+            </div>
+
+            <div className="flex items-end">
+              <button type="submit" className="h-10 w-full rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
+                Save plan
+              </button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Main info + stage transition */}
@@ -673,6 +766,8 @@ export default async function LeadDetailPage({
     </div>
   );
 }
+
+const selectCls = "flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 function InfoRow({
   icon,
