@@ -24,6 +24,7 @@ import {
   TrendingUp,
   Shield,
   Bell,
+  UsersRound,
 } from "lucide-react";
 
 const NAV: Array<{ href: string; label: string; short: string; icon: React.ComponentType<{ className?: string }>; roles?: string[] }> = [
@@ -33,6 +34,8 @@ const NAV: Array<{ href: string; label: string; short: string; icon: React.Compo
   { href: "/schedule",        label: "Counselling & Visits", short: "Schedule",   icon: CalendarDays },
   { href: "/healing",         label: "Healing Sessions",     short: "Healing",    icon: Sparkles },
   { href: "/distant-healing", label: "Distant Healing",      short: "Distant",    icon: MessagesSquare },
+  { href: "/groups/pranic",   label: "Pranic Intro Group",   short: "PH Group",   icon: UsersRound },
+  { href: "/groups/meditation", label: "Meditation Group",   short: "Meditation", icon: UsersRound },
   { href: "/payments",        label: "Payments & Credits",   short: "Payments",   icon: Wallet },
   { href: "/courses",         label: "Courses",              short: "Courses",    icon: GraduationCap },
   { href: "/inbox",           label: "WhatsApp Inbox",       short: "Inbox",      icon: MessagesSquare },
