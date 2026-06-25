@@ -5,6 +5,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getPaymentProvider } from "@/lib/providers/payment";
 import { getWhatsAppProvider } from "@/lib/providers/whatsapp";
+import { sendStagePair } from "@/lib/followup-wa";
 import { syncLeadScore } from "@/lib/lead-score";
 import { grantReferralReward } from "@/lib/referral";
 import { parseChakraStates, computeImprovement } from "@/lib/healing";
@@ -139,6 +140,21 @@ export async function markPaymentPaid(paymentId: string) {
     // healing credit for the package purchase. Idempotent via DB unique.
     void grantReferralReward(updated.clientId, "PACKAGE_PURCHASE")
       .catch((err) => console.error("[referral] PACKAGE_PURCHASE grant failed", err));
+
+    // Send package client WA pair to thank and guide next steps
+    const client = await prisma.client.findUnique({
+      where: { id: updated.clientId },
+      select: { name: true, phone: true },
+    });
+    if (client?.phone) {
+      const firstName = client.name.split(" ")[0];
+      void sendStagePair("package_client", {
+        clientId: updated.clientId,
+        phone: client.phone,
+        variables: [firstName],
+      }).catch((err) => console.error("[credits] package_client WA failed", err));
+    }
+
     return updated;
   });
 }

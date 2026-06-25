@@ -184,5 +184,24 @@ export async function confirmCheckIn(token: string): Promise<{ phase: CheckInPha
         ? { clientConfirmedStartAt: now }
         : { clientConfirmedEndAt: now },
   });
+
+  // Send healing summary WA pair after client confirms session end
+  if (found.phase === "end") {
+    const { sendStagePair } = await import("@/lib/followup-wa");
+    const session = await prisma.healingSession.findUnique({
+      where: { id: found.sessionId },
+      select: { clientId: true, startedAt: true, client: { select: { name: true, phone: true } } },
+    });
+    if (session?.client.phone) {
+      const firstName = session.client.name.split(" ")[0];
+      const dateStr = (session.startedAt ?? now).toLocaleDateString("en-IN", { day: "numeric", month: "long" });
+      void sendStagePair("healing", {
+        clientId: session.clientId,
+        phone: session.client.phone,
+        variables: [firstName, dateStr],
+      }).catch((err) => console.error("[check-in] healing summary WA failed", err));
+    }
+  }
+
   return { phase: found.phase, confirmedAt: now };
 }

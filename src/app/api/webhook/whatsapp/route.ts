@@ -57,15 +57,42 @@ type InboundMessage = {
 // Meta sends the button text as the payload — there is no separate Button ID field.
 // Keys are lowercase-trimmed for case-insensitive matching.
 const BUTTON_ACTION_MAP: Record<string, string> = {
+  // New Lead stage (lead_welcome / lead_followup_options)
+  "book free counselling":        "COUNSELLING",
+  "join introduction session":    "INTRO_PRANIC_HEALING_GROUP",
+  "join weekly meditation":       "MEDITATION_GROUP",
+  "request callback":             "TELEPHONIC_CALL",
+  // Counselling Done stage (counselling_followup_1/2)
+  "book centre visit":            "CENTER_VISIT_DEMO_HEALING",
+  "join meditation":              "MEDITATION_GROUP",
+  // Centre Visit Done stage (visit_followup_1/2)
+  "continue paid healing":        "PAID_HEALING",
+  "purchase package":             "PAID_HEALING",
+  "join basic course":            "COURSE_ENROLLMENT",
+  "need more time":               "TELEPHONIC_CALL",
+  // Healing Summary stage (healing_summary_1/2)
+  "book next healing":            "CENTER_VISIT_DEMO_HEALING",
+  "join meditation group":        "MEDITATION_GROUP",
+  "learn pranic healing":         "COURSE_ENROLLMENT",
+  "contact counsellor":           "COUNSELLING",
+  // Package Client stage (package_client_1/2)
+  "book next session":            "CENTER_VISIT_DEMO_HEALING",
+  "join course":                  "COURSE_ENROLLMENT",
+  "renew package":                "PAID_HEALING",
+  // Dormant stage (dormant_reactivation)
+  "book healing":                 "CENTER_VISIT_DEMO_HEALING",
+  "talk to counsellor":           "COUNSELLING",
+  // Pranic Group (pranic_group_followup_1/2)
+  "centre visit + demo":          "CENTER_VISIT_DEMO_HEALING",
+  // Meditation Group (meditation_followup_1/2)
+  "pranic healing intro":         "INTRO_PRANIC_HEALING_GROUP",
+  // Legacy / fallback button texts from older templates
   "counselling":                  "COUNSELLING",
   "pranic healing demo":          "CENTER_VISIT_DEMO_HEALING",
   "meditation group":             "MEDITATION_GROUP",
   "book a call":                  "TELEPHONIC_CALL",
-  "not interested":               "NOT_INTERESTED",
   "centre visit":                 "CENTER_VISIT_DEMO_HEALING",
-  "centre visit + demo":          "CENTER_VISIT_DEMO_HEALING",
   "pranic intro group":           "INTRO_PRANIC_HEALING_GROUP",
-  "pranic healing intro":         "INTRO_PRANIC_HEALING_GROUP",
   "distant demo healing":         "CENTER_VISIT_DEMO_HEALING",
   "further demo healing":         "CENTER_VISIT_DEMO_HEALING",
   "paid healing package":         "PAID_HEALING",
