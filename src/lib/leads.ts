@@ -114,18 +114,27 @@ export async function createLead(input: LeadInput, opts: { silent?: boolean } = 
     },
   });
 
-  // Fire-and-forget welcome message. Failure here must not block lead creation.
+  // Fire-and-forget welcome + follow-up options. Failure must not block lead creation.
   if (!opts.silent) {
-    getWhatsAppProvider()
-      .sendTemplate({
-        clientId: client.id,
-        phone,
-        templateName: "lead_welcome",
-        variables: [client.name.split(" ")[0], "https://crm.lifeenergycentre.in/files/lec-brochure.pdf"],
-      })
-      .catch((err) => {
-        console.error("[leads] welcome WhatsApp failed", err);
-      });
+    const wa = getWhatsAppProvider();
+    const firstName = client.name.split(" ")[0];
+    wa.sendTemplate({
+      clientId: client.id,
+      phone,
+      templateName: "lead_welcome",
+      variables: [firstName, "https://crm.lifeenergycentre.in/files/lec-brochure.pdf"],
+    })
+    .then(() =>
+      new Promise<void>(r => setTimeout(r, 2000)).then(() =>
+        wa.sendTemplate({
+          clientId: client.id,
+          phone,
+          templateName: "lead_followup_options",
+          variables: [],
+        })
+      )
+    )
+    .catch((err) => console.error("[leads] welcome WhatsApp failed", err));
   }
 
   return { client, created: true };

@@ -47,6 +47,19 @@ type InboundMessage = {
   timestamp: string;
   type: string;
   text?: { body: string };
+  interactive?: {
+    type: "button_reply" | "list_reply";
+    button_reply?: { id: string; title: string };
+  };
+};
+
+// Maps quick-reply button IDs to lead nextAction values
+const BUTTON_ACTION_MAP: Record<string, string> = {
+  COUNSELLING:    "COUNSELLING",
+  PRANIC_DEMO:    "CENTER_VISIT_DEMO_HEALING",
+  MEDITATION:     "MEDITATION_GROUP",
+  CALL_BACK:      "TELEPHONIC_CALL",
+  NOT_INTERESTED: "NOT_INTERESTED",
 };
 
 export async function POST(req: Request) {
@@ -101,9 +114,20 @@ export async function POST(req: Request) {
         // clientId = null and are rendered as "Unknown sender" threads
         // in /inbox (Phase 1b).
         const phone = "+" + msg.from;
-        const client = await prisma.client.findUnique({ where: { phone } });
-        const body = msg.text?.body ?? `[${msg.type}]`;
+        const client = await prisma.client.findUnique({
+          where: { phone },
+          select: { id: true, name: true, assignedToId: true, leadStatus: true },
+        });
+
+        // Resolve message body — for button replies use the button title
+        const buttonId = msg.interactive?.button_reply?.id ?? null;
+        const buttonTitle = msg.interactive?.button_reply?.title ?? null;
+        const body = buttonTitle
+          ? `[Button: ${buttonTitle}]`
+          : msg.text?.body ?? `[${msg.type}]`;
+
         const sentAt = new Date(Number(msg.timestamp) * 1000);
+
         // Idempotent: Meta retries the entire webhook payload if we
         // don't 2xx within ~20s. providerMessageId is the natural key.
         await prisma.whatsAppMessage.upsert({
@@ -119,6 +143,42 @@ export async function POST(req: Request) {
           },
           update: {}, // no-op on retry; the original write is canonical
         });
+
+        // ── Button reply: auto-update lead nextAction ──────────────────
+        if (buttonId && client?.id) {
+          const nextAction = BUTTON_ACTION_MAP[buttonId] ?? null;
+          if (nextAction) {
+            const isNotInterested = nextAction === "NOT_INTERESTED";
+            await prisma.client.update({
+              where: { id: client.id },
+              data: {
+                nextAction: nextAction as never,
+                ...(isNotInterested ? { leadStatus: "NOT_INTERESTED" as never } : {}),
+              },
+            }).catch((err) => console.error("[whatsapp webhook] button nextAction update failed", err));
+
+            // Notify assigned coordinator
+            if (client.assignedToId) {
+              const label: Record<string, string> = {
+                COUNSELLING: "wants Counselling",
+                CENTER_VISIT_DEMO_HEALING: "wants a Pranic Healing Demo",
+                MEDITATION_GROUP: "wants to join Meditation Group",
+                TELEPHONIC_CALL: "requested a Call Back",
+                NOT_INTERESTED: "is Not Interested",
+              };
+              await prisma.notification.create({
+                data: {
+                  recipientId: client.assignedToId,
+                  kind: "LEAD_REPLIED",
+                  title: `${client.name} ${label[nextAction] ?? buttonTitle}`,
+                  body: `Tap to open their lead and take action.`,
+                  href: `/leads/${client.id}`,
+                },
+              }).catch((err) => console.error("[whatsapp webhook] button notify failed", err));
+            }
+          }
+        }
+
         // Bump the thread aggregate for matched clients. Unknown senders
         // are handled by /inbox's orphan view (Phase 1b) — no thread row.
         if (client?.id) {
