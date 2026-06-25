@@ -200,7 +200,7 @@ export async function POST(req: Request) {
               await prisma.notification.create({
                 data: {
                   recipientId: client.assignedToId,
-                  kind: "LEAD_REPLIED",
+                  kind: "OTHER",
                   title: `${client.name} ${label}`,
                   body: "Tap to open their lead and take action.",
                   href: `/leads/${client.id}`,
