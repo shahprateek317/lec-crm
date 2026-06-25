@@ -12,6 +12,8 @@ const PAIRS: Record<string, Pair> = {
   visit:          { t1: "visit_followup_1",         t2: "visit_followup_2" },
   healing:        { t1: "healing_summary_1",        t2: "healing_summary_2" },
   package_client: { t1: "package_client_1",         t2: "package_client_2" },
+  need_more_time: { t1: "need_more_time_1",         t2: "need_more_time_2" },
+  feedback:       { t1: "feedback_request_1",       t2: "feedback_request_2" },
 };
 
 export async function sendStagePair(

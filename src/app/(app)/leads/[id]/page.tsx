@@ -119,10 +119,15 @@ export default async function LeadDetailPage({
   const openCounselling = counsellings.find((c) => !c.doneAt);
   const openVisit = visits.find((v) => !v.visitedAt);
 
-  // Interleave events for the timeline.
+  // Interleave all events for the conversation timeline.
   type Event =
     | { kind: "stage"; at: Date; label: string; detail: string }
-    | { kind: "whatsapp"; at: Date; label: string; detail: string; status: string };
+    | { kind: "whatsapp"; at: Date; label: string; detail: string; status: string }
+    | { kind: "counselling"; at: Date; label: string; detail: string }
+    | { kind: "visit"; at: Date; label: string; detail: string }
+    | { kind: "healing"; at: Date; label: string; detail: string }
+    | { kind: "payment"; at: Date; label: string; detail: string }
+    | { kind: "course"; at: Date; label: string; detail: string };
 
   const events: Event[] = [
     ...client.stageTransitions.map<Event>((t) => ({
@@ -137,6 +142,36 @@ export default async function LeadDetailPage({
       label: `WhatsApp ${m.direction.toLowerCase()}`,
       detail: m.body.split("\n")[0].slice(0, 120),
       status: m.status,
+    })),
+    ...counsellings.filter((c) => c.doneAt).map<Event>((c) => ({
+      kind: "counselling",
+      at: c.doneAt!,
+      label: "Counselling completed",
+      detail: `with ${c.counsellor.name}`,
+    })),
+    ...counsellings.filter((c) => !c.doneAt).map<Event>((c) => ({
+      kind: "counselling",
+      at: c.scheduledAt,
+      label: "Counselling scheduled",
+      detail: `with ${c.counsellor.name}`,
+    })),
+    ...visits.filter((v) => v.visitedAt).map<Event>((v) => ({
+      kind: "visit",
+      at: v.visitedAt!,
+      label: "Centre visit completed",
+      detail: v.assignedHealer ? `with ${v.assignedHealer.name}` : "unassigned healer",
+    })),
+    ...Array.from(new Map([...recentHealing, ...upcomingHealingSessions].map(h => [h.id, h])).values()).map<Event>((h) => ({
+      kind: "healing",
+      at: h.scheduledAt ?? h.date,
+      label: `Healing session${h.scheduledAt && h.scheduledAt > new Date() ? " (upcoming)" : ""}`,
+      detail: `${h.healer.name} · ${h.mode === "DISTANT" ? "Distant" : "In-person"}${h.creditUsed ? "" : " · complimentary"}`,
+    })),
+    ...recentPayments.map<Event>((p) => ({
+      kind: "payment",
+      at: p.createdAt,
+      label: `Payment — ₹${p.amount.toLocaleString("en-IN")}`,
+      detail: p.status.toLowerCase(),
     })),
   ].sort((a, b) => b.at.getTime() - a.at.getTime());
 
@@ -215,13 +250,24 @@ export default async function LeadDetailPage({
               </select>
             </div>
 
-            <div className="space-y-1 sm:col-span-2 lg:col-span-3">
+            <div className="space-y-1 sm:col-span-2 lg:col-span-2">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Remarks</p>
               <input
                 type="text"
                 name="actionRemarks"
                 defaultValue={client.actionRemarks ?? ""}
                 placeholder="Notes on current situation or plan…"
+                className={selectCls}
+              />
+            </div>
+
+            <div className="space-y-1 sm:col-span-2 lg:col-span-1">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Journey Reason</p>
+              <input
+                type="text"
+                name="journeyReason"
+                defaultValue={client.journeyReason ?? ""}
+                placeholder="e.g. Financial, Busy Schedule, Distance…"
                 className={selectCls}
               />
             </div>
@@ -660,28 +706,43 @@ export default async function LeadDetailPage({
 
           <Card className="rounded-xl">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Timeline
+              <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <Clock className="h-4 w-4" />
+                Conversation Timeline
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {events.length === 0 && (
                 <p className="text-xs text-muted-foreground">Nothing yet.</p>
               )}
-              {events.slice(0, 20).map((e, i) => (
-                <div key={i} className="border-l-2 border-border pl-3">
-                  <p className="text-xs font-medium">
-                    {e.label}
-                    {e.kind === "whatsapp" && (
-                      <span className="ml-1.5 text-muted-foreground">· {e.status.toLowerCase()}</span>
-                    )}
-                  </p>
-                  <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{e.detail}</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    {format(e.at, "dd MMM yyyy, HH:mm")}
-                  </p>
-                </div>
-              ))}
+              {events.slice(0, 30).map((e, i) => {
+                const kindColor: Record<string, string> = {
+                  stage:       "border-primary",
+                  whatsapp:    "border-emerald-400",
+                  counselling: "border-blue-400",
+                  visit:       "border-violet-400",
+                  healing:     "border-amber-400",
+                  payment:     "border-teal-400",
+                  course:      "border-rose-400",
+                };
+                return (
+                  <div key={i} className={`border-l-2 pl-3 ${kindColor[e.kind] ?? "border-border"}`}>
+                    <p className="text-xs font-medium">
+                      {e.label}
+                      {"status" in e && (
+                        <span className="ml-1.5 text-muted-foreground">· {(e as { status: string }).status.toLowerCase()}</span>
+                      )}
+                    </p>
+                    <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{e.detail}</p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      {format(e.at, "dd MMM yyyy, HH:mm")}
+                    </p>
+                  </div>
+                );
+              })}
+              {events.length > 30 && (
+                <p className="text-[11px] text-muted-foreground">+ {events.length - 30} older events</p>
+              )}
             </CardContent>
           </Card>
         </div>

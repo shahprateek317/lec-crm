@@ -15,6 +15,7 @@ export async function updateActionPlanAction(formData: FormData) {
   const nextActionDate = String(formData.get("nextActionDate") ?? "") || null;
   const leadStatus = (String(formData.get("leadStatus") ?? "") || null) as LeadStatus | null;
   const actionRemarks = String(formData.get("actionRemarks") ?? "") || null;
+  const journeyReason = String(formData.get("journeyReason") ?? "") || null;
   const currentAction = (String(formData.get("currentAction") ?? "") || null) as ActionType | null;
 
   await prisma.client.update({
@@ -25,6 +26,7 @@ export async function updateActionPlanAction(formData: FormData) {
       nextActionDate: nextActionDate ? new Date(nextActionDate) : null,
       leadStatus: leadStatus ?? undefined,
       actionRemarks,
+      journeyReason,
     },
   });
 

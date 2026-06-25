@@ -499,6 +499,7 @@ model Client {
   nextAction             ActionType?
   nextActionDate         DateTime?
   actionRemarks          String?
+  journeyReason          String?
   assignedToId           String?
   assignedTo             User?              @relation("AssignedCoordinator", fields: [assignedToId], references: [id])
   notes                  String?

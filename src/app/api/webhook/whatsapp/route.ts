@@ -82,6 +82,8 @@ const BUTTON_ACTION_MAP: Record<string, string> = {
   // Dormant stage (dormant_reactivation)
   "book healing":                 "CENTER_VISIT_DEMO_HEALING",
   "talk to counsellor":           "COUNSELLING",
+  // Need More Time stage (need_more_time_1/2)
+  "contact me later":             "TELEPHONIC_CALL",
   // Pranic Group (pranic_group_followup_1/2)
   "centre visit + demo":          "CENTER_VISIT_DEMO_HEALING",
   // Meditation Group (meditation_followup_1/2)
@@ -101,10 +103,13 @@ const BUTTON_ACTION_MAP: Record<string, string> = {
 };
 
 // Button texts that also set leadStatus = NOT_INTERESTED
-const NOT_INTERESTED_BUTTONS = new Set(["not interested"]);
+const NOT_INTERESTED_BUTTONS = new Set(["not interested", "close for now"]);
 
 // Button texts that exit the meditation group
 const EXIT_MEDITATION_BUTTONS = new Set(["exit meditation group"]);
+
+// Feedback rating buttons — notify coordinator but don't change nextAction
+const FEEDBACK_RATING_BUTTONS = new Set(["excellent", "good", "average", "needs improvement"]);
 
 export async function POST(req: Request) {
   // Read raw bytes BEFORE any JSON parsing — Meta signs the exact body.
@@ -191,6 +196,19 @@ export async function POST(req: Request) {
 
         // ── Button reply: auto-update lead next action ─────────────────
         if (buttonKey && client?.id) {
+          // FEEDBACK RATING: notify coordinator with the rating
+          if (FEEDBACK_RATING_BUTTONS.has(buttonKey) && client.assignedToId) {
+            await prisma.notification.create({
+              data: {
+                recipientId: client.assignedToId,
+                kind: "OTHER",
+                title: `${client.name} rated their experience: ${buttonTitle}`,
+                body: "Tap to open their lead.",
+                href: `/leads/${client.id}`,
+              },
+            }).catch((err) => console.error("[whatsapp webhook] feedback notify failed", err));
+          }
+
           // EXIT_MEDITATION: mark membership as EXITED
           if (EXIT_MEDITATION_BUTTONS.has(buttonKey)) {
             await prisma.meditationGroupMembership.updateMany({
