@@ -6,6 +6,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { transitionStage } from "@/lib/pipeline";
 import { getWhatsAppProvider } from "@/lib/providers/whatsapp";
+import { sendStagePair } from "@/lib/followup-wa";
 import { pickHealer, pickCounsellor } from "@/lib/assignment";
 import { grantReferralReward } from "@/lib/referral";
 import { notifyMany } from "@/lib/notify";
@@ -124,14 +125,11 @@ export async function completeCounseling(input: z.infer<typeof counselingComplet
     byUserId: parsed.byUserId,
   });
   const client = await prisma.client.findUniqueOrThrow({ where: { id: session.clientId } });
-  getWhatsAppProvider()
-    .sendTemplate({
-      clientId: client.id,
-      phone: client.phone,
-      templateName: "visit_invitation",
-      variables: [client.name.split(" ")[0]],
-    })
-    .catch((err) => console.error("[scheduling] visit invitation WhatsApp failed", err));
+  sendStagePair("counselling", {
+    clientId: client.id,
+    phone: client.phone,
+    variables: [client.name.split(" ")[0]],
+  }).catch((err) => console.error("[scheduling] counselling followup WhatsApp failed", err));
   // Notify all coordinators and admins that counselling is done.
   const coordinators = await prisma.user.findMany({
     where: { roles: { hasSome: ["COORDINATOR", "ADMIN", "SUPER_ADMIN"] } },
@@ -325,10 +323,22 @@ export async function completeVisit(input: z.infer<typeof visitCompleteSchema>) 
     toStage: "VISIT_DONE",
     byUserId: parsed.byUserId,
   });
-  // Referral reward — if this client was referred by another client, the
-  // referrer earns a healing credit. Idempotent (DB unique on reason),
-  // fire-and-forget so a referral hiccup never blocks visit completion.
+  // Referral reward — fire-and-forget so a hiccup never blocks visit completion.
   void grantReferralReward(visit.clientId, "CENTRE_VISIT")
     .catch((err) => console.error("[referral] CENTRE_VISIT grant failed", err));
+
+  // Send visit follow-up WhatsApp with next-step buttons
+  const visitClient = await prisma.client.findUnique({
+    where: { id: visit.clientId },
+    select: { id: true, name: true, phone: true },
+  });
+  if (visitClient) {
+    sendStagePair("visit", {
+      clientId: visitClient.id,
+      phone: visitClient.phone,
+      variables: [visitClient.name.split(" ")[0]],
+    }).catch((err) => console.error("[scheduling] visit followup WhatsApp failed", err));
+  }
+
   return visit;
 }

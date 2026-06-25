@@ -53,14 +53,32 @@ type InboundMessage = {
   };
 };
 
-// Maps quick-reply button IDs to lead nextAction values
+// Maps quick-reply button IDs → nextAction enum values
 const BUTTON_ACTION_MAP: Record<string, string> = {
-  COUNSELLING:    "COUNSELLING",
-  PRANIC_DEMO:    "CENTER_VISIT_DEMO_HEALING",
-  MEDITATION:     "MEDITATION_GROUP",
-  CALL_BACK:      "TELEPHONIC_CALL",
+  // Lead welcome buttons
+  COUNSELLING:          "COUNSELLING",
+  PRANIC_DEMO:          "CENTER_VISIT_DEMO_HEALING",
+  MEDITATION:           "MEDITATION_GROUP",
+  CALL_BACK:            "TELEPHONIC_CALL",
+  NOT_INTERESTED:       "NOT_INTERESTED",
+  // Counselling followup buttons
+  CENTER_VISIT:         "CENTER_VISIT_DEMO_HEALING",
+  PRANIC_GROUP:         "INTRO_PRANIC_HEALING_GROUP",
+  DISTANT_DEMO:         "CENTER_VISIT_DEMO_HEALING",
+  FURTHER_COUNSELLING:  "COUNSELLING",
+  // Visit followup buttons
+  FURTHER_DEMO:         "CENTER_VISIT_DEMO_HEALING",
+  PAID_HEALING:         "PAID_HEALING",
+  COURSES:              "COURSE_ENROLLMENT",
+};
+
+// Button IDs that also update leadStatus
+const BUTTON_STATUS_MAP: Record<string, string> = {
   NOT_INTERESTED: "NOT_INTERESTED",
 };
+
+// Button IDs that trigger membership exit from meditation group
+const EXIT_MEDITATION_BUTTONS = new Set(["EXIT_MEDITATION"]);
 
 export async function POST(req: Request) {
   // Read raw bytes BEFORE any JSON parsing — Meta signs the exact body.
@@ -144,34 +162,47 @@ export async function POST(req: Request) {
           update: {}, // no-op on retry; the original write is canonical
         });
 
-        // ── Button reply: auto-update lead nextAction ──────────────────
+        // ── Button reply: auto-update lead next action ─────────────────
         if (buttonId && client?.id) {
+          // EXIT_MEDITATION: mark membership as EXITED
+          if (EXIT_MEDITATION_BUTTONS.has(buttonId)) {
+            await prisma.meditationGroupMembership.updateMany({
+              where: { clientId: client.id },
+              data: { status: "EXITED", updatedAt: new Date() },
+            }).catch((err) => console.error("[whatsapp webhook] meditation exit failed", err));
+          }
+
           const nextAction = BUTTON_ACTION_MAP[buttonId] ?? null;
-          if (nextAction) {
-            const isNotInterested = nextAction === "NOT_INTERESTED";
+          const newLeadStatus = BUTTON_STATUS_MAP[buttonId] ?? null;
+
+          if (nextAction || newLeadStatus) {
             await prisma.client.update({
               where: { id: client.id },
               data: {
-                nextAction: nextAction as never,
-                ...(isNotInterested ? { leadStatus: "NOT_INTERESTED" as never } : {}),
+                ...(nextAction ? { nextAction: nextAction as never } : {}),
+                ...(newLeadStatus ? { leadStatus: newLeadStatus as never } : {}),
               },
             }).catch((err) => console.error("[whatsapp webhook] button nextAction update failed", err));
 
             // Notify assigned coordinator
             if (client.assignedToId) {
-              const label: Record<string, string> = {
-                COUNSELLING: "wants Counselling",
-                CENTER_VISIT_DEMO_HEALING: "wants a Pranic Healing Demo",
-                MEDITATION_GROUP: "wants to join Meditation Group",
-                TELEPHONIC_CALL: "requested a Call Back",
-                NOT_INTERESTED: "is Not Interested",
+              const ACTION_LABEL: Record<string, string> = {
+                COUNSELLING:                  "wants Counselling",
+                CENTER_VISIT_DEMO_HEALING:    "wants a Centre Visit / Demo Healing",
+                INTRO_PRANIC_HEALING_GROUP:   "wants to join Pranic Intro Group",
+                MEDITATION_GROUP:             "wants to join Meditation Group",
+                TELEPHONIC_CALL:              "requested a Telecall",
+                PAID_HEALING:                 "is interested in Paid Healing",
+                COURSE_ENROLLMENT:            "is interested in Courses",
+                NOT_INTERESTED:               "is Not Interested",
               };
+              const label = nextAction ? (ACTION_LABEL[nextAction] ?? buttonTitle) : "is Not Interested";
               await prisma.notification.create({
                 data: {
                   recipientId: client.assignedToId,
                   kind: "LEAD_REPLIED",
-                  title: `${client.name} ${label[nextAction] ?? buttonTitle}`,
-                  body: `Tap to open their lead and take action.`,
+                  title: `${client.name} ${label}`,
+                  body: "Tap to open their lead and take action.",
                   href: `/leads/${client.id}`,
                 },
               }).catch((err) => console.error("[whatsapp webhook] button notify failed", err));

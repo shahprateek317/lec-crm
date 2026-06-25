@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
-import { getWhatsAppProvider } from "@/lib/providers/whatsapp";
 import { format } from "date-fns";
+import { sendStagePair } from "@/lib/followup-wa";
 import type { MeditationMemberStatus } from "@prisma/client";
 
 export async function addMeditationMemberAction(formData: FormData) {
@@ -50,17 +50,15 @@ export async function sendMeditationThankYouAction(formData: FormData) {
     select: { id: true, name: true, phone: true },
   });
 
-  const wa = getWhatsAppProvider();
   const dateStr = format(new Date(), "dd MMM yyyy");
 
   for (const c of clients) {
     const firstName = c.name.split(" ")[0];
-    wa.sendTemplate({
+    sendStagePair("meditation", {
       clientId: c.id,
       phone: c.phone,
-      templateName: "meditation_thankyou",
       variables: [firstName, dateStr],
-    }).catch((err) => console.error("[meditation group] thank you WA failed", err));
+    }).catch((err) => console.error("[meditation group] followup WA failed", err));
   }
 
   revalidatePath("/groups/meditation");

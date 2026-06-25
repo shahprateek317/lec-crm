@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
-import { getWhatsAppProvider } from "@/lib/providers/whatsapp";
 import { format } from "date-fns";
+import { sendStagePair } from "@/lib/followup-wa";
 import type { AttendanceStatus } from "@prisma/client";
 
 export async function createPranicSessionAction(formData: FormData) {
@@ -71,17 +71,15 @@ export async function sendPranicThankYouAction(formData: FormData) {
   });
   if (!session) throw new Error("Session not found");
 
-  const wa = getWhatsAppProvider();
   const dateStr = format(session.scheduledAt, "dd MMM yyyy");
 
   for (const att of session.attendances) {
     const firstName = att.client.name.split(" ")[0];
-    wa.sendTemplate({
+    sendStagePair("pranic_group", {
       clientId: att.client.id,
       phone: att.client.phone,
-      templateName: "pranic_group_thankyou",
       variables: [firstName, dateStr],
-    }).catch((err) => console.error("[pranic group] thank you WA failed", err));
+    }).catch((err) => console.error("[pranic group] followup WA failed", err));
   }
 
   revalidatePath(`/groups/pranic/${sessionId}`);
