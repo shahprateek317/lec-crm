@@ -53,32 +53,31 @@ type InboundMessage = {
   };
 };
 
-// Maps quick-reply button IDs → nextAction enum values
+// Maps button text (as entered in Meta template manager) → nextAction enum.
+// Meta sends the button text as the payload — there is no separate Button ID field.
+// Keys are lowercase-trimmed for case-insensitive matching.
 const BUTTON_ACTION_MAP: Record<string, string> = {
-  // Lead welcome buttons
-  COUNSELLING:          "COUNSELLING",
-  PRANIC_DEMO:          "CENTER_VISIT_DEMO_HEALING",
-  MEDITATION:           "MEDITATION_GROUP",
-  CALL_BACK:            "TELEPHONIC_CALL",
-  NOT_INTERESTED:       "NOT_INTERESTED",
-  // Counselling followup buttons
-  CENTER_VISIT:         "CENTER_VISIT_DEMO_HEALING",
-  PRANIC_GROUP:         "INTRO_PRANIC_HEALING_GROUP",
-  DISTANT_DEMO:         "CENTER_VISIT_DEMO_HEALING",
-  FURTHER_COUNSELLING:  "COUNSELLING",
-  // Visit followup buttons
-  FURTHER_DEMO:         "CENTER_VISIT_DEMO_HEALING",
-  PAID_HEALING:         "PAID_HEALING",
-  COURSES:              "COURSE_ENROLLMENT",
+  "counselling":                  "COUNSELLING",
+  "pranic healing demo":          "CENTER_VISIT_DEMO_HEALING",
+  "meditation group":             "MEDITATION_GROUP",
+  "book a call":                  "TELEPHONIC_CALL",
+  "not interested":               "NOT_INTERESTED",
+  "centre visit":                 "CENTER_VISIT_DEMO_HEALING",
+  "centre visit + demo":          "CENTER_VISIT_DEMO_HEALING",
+  "pranic intro group":           "INTRO_PRANIC_HEALING_GROUP",
+  "pranic healing intro":         "INTRO_PRANIC_HEALING_GROUP",
+  "distant demo healing":         "CENTER_VISIT_DEMO_HEALING",
+  "further demo healing":         "CENTER_VISIT_DEMO_HEALING",
+  "paid healing package":         "PAID_HEALING",
+  "request a telecall":           "TELEPHONIC_CALL",
+  "interested in courses":        "COURSE_ENROLLMENT",
 };
 
-// Button IDs that also update leadStatus
-const BUTTON_STATUS_MAP: Record<string, string> = {
-  NOT_INTERESTED: "NOT_INTERESTED",
-};
+// Button texts that also set leadStatus = NOT_INTERESTED
+const NOT_INTERESTED_BUTTONS = new Set(["not interested"]);
 
-// Button IDs that trigger membership exit from meditation group
-const EXIT_MEDITATION_BUTTONS = new Set(["EXIT_MEDITATION"]);
+// Button texts that exit the meditation group
+const EXIT_MEDITATION_BUTTONS = new Set(["exit meditation group"]);
 
 export async function POST(req: Request) {
   // Read raw bytes BEFORE any JSON parsing — Meta signs the exact body.
@@ -137,9 +136,10 @@ export async function POST(req: Request) {
           select: { id: true, name: true, assignedToId: true, leadStatus: true },
         });
 
-        // Resolve message body — for button replies use the button title
-        const buttonId = msg.interactive?.button_reply?.id ?? null;
+        // Resolve message body — for button replies use the button title.
+        // Meta sends button text as both .id and .title; we match on .title (lowercased).
         const buttonTitle = msg.interactive?.button_reply?.title ?? null;
+        const buttonKey = buttonTitle?.toLowerCase().trim() ?? null;
         const body = buttonTitle
           ? `[Button: ${buttonTitle}]`
           : msg.text?.body ?? `[${msg.type}]`;
@@ -163,17 +163,17 @@ export async function POST(req: Request) {
         });
 
         // ── Button reply: auto-update lead next action ─────────────────
-        if (buttonId && client?.id) {
+        if (buttonKey && client?.id) {
           // EXIT_MEDITATION: mark membership as EXITED
-          if (EXIT_MEDITATION_BUTTONS.has(buttonId)) {
+          if (EXIT_MEDITATION_BUTTONS.has(buttonKey)) {
             await prisma.meditationGroupMembership.updateMany({
               where: { clientId: client.id },
               data: { status: "EXITED", updatedAt: new Date() },
             }).catch((err) => console.error("[whatsapp webhook] meditation exit failed", err));
           }
 
-          const nextAction = BUTTON_ACTION_MAP[buttonId] ?? null;
-          const newLeadStatus = BUTTON_STATUS_MAP[buttonId] ?? null;
+          const nextAction = BUTTON_ACTION_MAP[buttonKey] ?? null;
+          const newLeadStatus = NOT_INTERESTED_BUTTONS.has(buttonKey) ? "NOT_INTERESTED" : null;
 
           if (nextAction || newLeadStatus) {
             await prisma.client.update({
