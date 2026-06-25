@@ -82,8 +82,28 @@ const BUTTON_ACTION_MAP: Record<string, string> = {
   // Dormant stage (dormant_reactivation)
   "book healing":                 "CENTER_VISIT_DEMO_HEALING",
   "talk to counsellor":           "COUNSELLING",
-  // Need More Time stage (need_more_time_1/2)
+  // Need More Time / callback stage
   "contact me later":             "TELEPHONIC_CALL",
+  "remind me later":              "TELEPHONIC_CALL",
+  "i'd like to discuss":          "TELEPHONIC_CALL",
+  "book free healing":            "CENTER_VISIT_DEMO_HEALING",
+  "book next healing":            "CENTER_VISIT_DEMO_HEALING",
+  "book single healing":          "CENTER_VISIT_DEMO_HEALING",
+  "book first session":           "CENTER_VISIT_DEMO_HEALING",
+  "continue healing":             "PAID_HEALING",
+  "healing packages":             "PAID_HEALING",
+  "explore healing packages":     "PAID_HEALING",
+  "view packages":                "PAID_HEALING",
+  "view healing packages":        "PAID_HEALING",
+  "need more time":               "TELEPHONIC_CALL",
+  "reserve my seat":              "MEDITATION_GROUP",
+  "register now":                 "INTRO_PRANIC_HEALING_GROUP",
+  "join introduction again":      "INTRO_PRANIC_HEALING_GROUP",
+  "learn about the course":       "COURSE_ENROLLMENT",
+  "course details":               "COURSE_ENROLLMENT",
+  "reserve seat":                 "COURSE_ENROLLMENT",
+  "reserve my seat (course)":     "COURSE_ENROLLMENT",
+  "explore advanced courses":     "COURSE_ENROLLMENT",
   // Pranic Group (pranic_group_followup_1/2)
   "centre visit + demo":          "CENTER_VISIT_DEMO_HEALING",
   // Meditation Group (meditation_followup_1/2)
@@ -108,8 +128,12 @@ const NOT_INTERESTED_BUTTONS = new Set(["not interested", "close for now"]);
 // Button texts that exit the meditation group
 const EXIT_MEDITATION_BUTTONS = new Set(["exit meditation group"]);
 
-// Feedback rating buttons — notify coordinator but don't change nextAction
-const FEEDBACK_RATING_BUTTONS = new Set(["excellent", "good", "average", "needs improvement"]);
+// Feedback / progress rating buttons — notify coordinator but don't change nextAction
+const FEEDBACK_RATING_BUTTONS = new Set([
+  "excellent", "good", "average", "needs improvement", "needs attention",
+  "feeling better", "slight improvement", "no significant change",
+  "i'm doing well", "write review", "refer a friend", "i'm interested",
+]);
 
 export async function POST(req: Request) {
   // Read raw bytes BEFORE any JSON parsing — Meta signs the exact body.
