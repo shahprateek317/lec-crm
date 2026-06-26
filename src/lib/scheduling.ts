@@ -252,7 +252,7 @@ export async function scheduleVisit(input: z.infer<typeof visitScheduleSchema>) 
       clientId: parsed.clientId,
       phone: client.phone,
       templateName: "visit_confirmation",
-      variables: [format(parsed.scheduledAt, "dd MMM, HH:mm")],
+      variables: [client.name, format(parsed.scheduledAt, "dd MMM, HH:mm")],
     })
     .catch((err) => console.error("[scheduling] visit confirm WhatsApp failed", err));
 
