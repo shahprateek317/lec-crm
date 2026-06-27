@@ -104,6 +104,9 @@ const BUTTON_ACTION_MAP: Record<string, string> = {
   "explore advanced courses":     "COURSE_ENROLLMENT",
   // Pranic Group (pranic_group_followup_1/2)
   "centre visit + demo":          "CENTER_VISIT_DEMO_HEALING",
+  // Course buttons
+  "join meditation first":        "MEDITATION_GROUP",
+  "reserve seat (course)":        "COURSE_ENROLLMENT",
   // Meditation Group (meditation_followup_1/2)
   "pranic healing intro":         "INTRO_PRANIC_HEALING_GROUP",
   // Legacy / fallback button texts from older templates

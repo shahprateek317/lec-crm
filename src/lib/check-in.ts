@@ -195,10 +195,12 @@ export async function confirmCheckIn(token: string): Promise<{ phase: CheckInPha
     if (session?.client.phone) {
       const firstName = session.client.name.split(" ")[0];
       const dateStr = (session.startedAt ?? now).toLocaleDateString("en-IN", { day: "numeric", month: "long" });
+      // {{3}} = summary URL — Phase B will be a real per-session page; using portal root until then
+      const summaryUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://lec.in"}/portal`;
       void sendStagePair("healing", {
         clientId: session.clientId,
         phone: session.client.phone,
-        variables: [firstName, dateStr],
+        variables: [firstName, dateStr, summaryUrl],
       }).catch((err) => console.error("[check-in] healing summary WA failed", err));
     }
   }
