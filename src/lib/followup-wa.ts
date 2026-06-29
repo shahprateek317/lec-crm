@@ -1,28 +1,23 @@
-// Sends two WhatsApp template messages in sequence (2s apart) for each stage completion.
-// Each pair = message1 (3 buttons) + message2 (2-3 more buttons).
+// Sends a single WhatsApp template message for each stage completion.
 
 import { getWhatsAppProvider } from "@/lib/providers/whatsapp";
 
-type Pair = { t1: string; t2: string };
-
-const PAIRS: Record<string, Pair> = {
-  counselling:    { t1: "counselling_followup_1",  t2: "counselling_followup_2" },
-  pranic_group:   { t1: "pranic_group_followup_1", t2: "pranic_group_followup_2" },
-  meditation:     { t1: "meditation_followup_1",   t2: "meditation_followup_2" },
-  visit:          { t1: "visit_followup_1",         t2: "visit_followup_2" },
-  healing:        { t1: "healing_summary_1",        t2: "healing_summary_2" },
-  package_client: { t1: "package_client_1",         t2: "package_client_2" },
-  need_more_time: { t1: "need_more_time_1",         t2: "need_more_time_2" },
-  feedback:       { t1: "feedback_request_1",       t2: "feedback_request_2" },
+const STAGE_TEMPLATE: Record<string, string> = {
+  counselling:    "counselling_followup_1",
+  pranic_group:   "pranic_group_followup_1",
+  visit:          "visit_followup_1",
+  healing:        "healing_summary_1",
+  package_client: "package_client_1",
+  need_more_time: "need_more_time_1",
+  feedback:       "feedback_request_1",
 };
 
 export async function sendStagePair(
-  stage: keyof typeof PAIRS,
+  stage: keyof typeof STAGE_TEMPLATE,
   opts: { clientId: string; phone: string; variables: string[] }
 ): Promise<void> {
-  const pair = PAIRS[stage];
+  const templateName = STAGE_TEMPLATE[stage];
+  if (!templateName) return;
   const wa = getWhatsAppProvider();
-  await wa.sendTemplate({ clientId: opts.clientId, phone: opts.phone, templateName: pair.t1, variables: opts.variables });
-  await new Promise<void>(r => setTimeout(r, 2000));
-  await wa.sendTemplate({ clientId: opts.clientId, phone: opts.phone, templateName: pair.t2, variables: [opts.variables[0]] });
+  await wa.sendTemplate({ clientId: opts.clientId, phone: opts.phone, templateName, variables: opts.variables });
 }

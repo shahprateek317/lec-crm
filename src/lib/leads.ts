@@ -124,16 +124,6 @@ export async function createLead(input: LeadInput, opts: { silent?: boolean } = 
       templateName: "lead_welcome",
       variables: [firstName, "https://crm.lifeenergycentre.in/files/lec-brochure.pdf"],
     })
-    .then(() =>
-      new Promise<void>(r => setTimeout(r, 2000)).then(() =>
-        wa.sendTemplate({
-          clientId: client.id,
-          phone,
-          templateName: "lead_followup_options",
-          variables: [],
-        })
-      )
-    )
     .catch((err) => console.error("[leads] welcome WhatsApp failed", err));
   }
 
