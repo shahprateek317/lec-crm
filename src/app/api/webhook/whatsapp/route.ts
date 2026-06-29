@@ -243,6 +243,15 @@ export async function POST(req: Request) {
           }
 
           const nextAction = BUTTON_ACTION_MAP[buttonKey] ?? null;
+
+          // JOIN_MEDITATION: auto-add to membership when client taps any meditation button
+          if (nextAction === "MEDITATION_GROUP") {
+            await prisma.meditationGroupMembership.upsert({
+              where: { clientId: client.id },
+              create: { clientId: client.id, status: "ACTIVE", joinedAt: new Date(), updatedAt: new Date() },
+              update: { status: "ACTIVE", updatedAt: new Date() },
+            }).catch((err) => console.error("[whatsapp webhook] meditation auto-add failed", err));
+          }
           const newLeadStatus = NOT_INTERESTED_BUTTONS.has(buttonKey) ? "NOT_INTERESTED" : null;
 
           if (nextAction || newLeadStatus) {
