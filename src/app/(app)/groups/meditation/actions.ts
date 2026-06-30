@@ -13,6 +13,11 @@ export async function addMeditationMemberAction(formData: FormData) {
   const clientId = String(formData.get("clientId") ?? "");
   if (!clientId) throw new Error("Client required");
 
+  const client = await prisma.client.findUniqueOrThrow({
+    where: { id: clientId },
+    select: { id: true, name: true, phone: true, assignedToId: true },
+  });
+
   await prisma.meditationGroupMembership.upsert({
     where: { clientId },
     create: { clientId, status: "ACTIVE", joinedAt: new Date(), updatedAt: new Date() },
@@ -23,6 +28,30 @@ export async function addMeditationMemberAction(formData: FormData) {
     where: { id: clientId },
     data: { currentAction: "MEDITATION_GROUP" },
   });
+
+  // Notify coordinator to add member to WhatsApp group
+  if (client.assignedToId) {
+    await prisma.notification.create({
+      data: {
+        recipientId: client.assignedToId,
+        kind: "OTHER",
+        title: `Add ${client.name} to Meditation WhatsApp Group`,
+        body: `Phone: ${client.phone} — New meditation group member.`,
+        href: `/leads/${client.id}`,
+      },
+    }).catch((err) => console.error("[meditation] coordinator notify failed", err));
+  }
+
+  // Send welcome WA to client
+  if (client.phone) {
+    const { getWhatsAppProvider } = await import("@/lib/providers/whatsapp");
+    getWhatsAppProvider().sendTemplate({
+      clientId: client.id,
+      phone: client.phone,
+      templateName: "meditation_group_welcome",
+      variables: [client.name.split(" ")[0]],
+    }).catch((err) => console.error("[meditation] welcome WA failed", err));
+  }
 
   revalidatePath("/groups/meditation");
 }

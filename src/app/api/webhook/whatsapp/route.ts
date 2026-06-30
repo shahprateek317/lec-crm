@@ -19,7 +19,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSetting, SETTING_KEYS } from "@/lib/settings";
 import { verifyWhatsAppSignature } from "@/lib/webhook-signing";
-import { touchThread } from "@/lib/providers/whatsapp";
+import { touchThread, getWhatsAppProvider } from "@/lib/providers/whatsapp";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -246,11 +246,37 @@ export async function POST(req: Request) {
 
           // JOIN_MEDITATION: auto-add to membership when client taps any meditation button
           if (nextAction === "MEDITATION_GROUP") {
+            const wasAlreadyMember = await prisma.meditationGroupMembership.findUnique({
+              where: { clientId: client.id },
+              select: { status: true },
+            });
             await prisma.meditationGroupMembership.upsert({
               where: { clientId: client.id },
               create: { clientId: client.id, status: "ACTIVE", joinedAt: new Date(), updatedAt: new Date() },
               update: { status: "ACTIVE", updatedAt: new Date() },
             }).catch((err) => console.error("[whatsapp webhook] meditation auto-add failed", err));
+
+            // Only notify + welcome on first join (not on re-activation)
+            if (!wasAlreadyMember && client.phone) {
+              if (client.assignedToId) {
+                prisma.notification.create({
+                  data: {
+                    recipientId: client.assignedToId,
+                    kind: "OTHER",
+                    title: `Add ${client.name} to Meditation WhatsApp Group`,
+                    body: `Phone: ${phone} — New meditation group member.`,
+                    href: `/leads/${client.id}`,
+                  },
+                }).catch((err) => console.error("[whatsapp webhook] meditation notify failed", err));
+              }
+              const wa = getWhatsAppProvider();
+              wa.sendTemplate({
+                clientId: client.id,
+                phone: client.phone,
+                templateName: "meditation_group_welcome",
+                variables: [client.name.split(" ")[0]],
+              }).catch((err) => console.error("[whatsapp webhook] meditation welcome WA failed", err));
+            }
           }
           const newLeadStatus = NOT_INTERESTED_BUTTONS.has(buttonKey) ? "NOT_INTERESTED" : null;
 
