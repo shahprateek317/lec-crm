@@ -257,7 +257,7 @@ export async function POST(req: Request) {
             }).catch((err) => console.error("[whatsapp webhook] meditation auto-add failed", err));
 
             // Only notify + welcome on first join (not on re-activation)
-            if (!wasAlreadyMember && client.phone) {
+            if (!wasAlreadyMember) {
               if (client.assignedToId) {
                 prisma.notification.create({
                   data: {
