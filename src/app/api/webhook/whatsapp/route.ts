@@ -272,7 +272,7 @@ export async function POST(req: Request) {
               const wa = getWhatsAppProvider();
               wa.sendTemplate({
                 clientId: client.id,
-                phone: client.phone,
+                phone,
                 templateName: "meditation_group_welcome",
                 variables: [client.name.split(" ")[0]],
               }).catch((err) => console.error("[whatsapp webhook] meditation welcome WA failed", err));
