@@ -578,11 +578,12 @@ model MeditationGroupMembership {
   joinedAt        DateTime               @default(now())
   attendanceCount Int                    @default(0)
   lastAttendedAt  DateTime?
-  status          MeditationMemberStatus @default(ACTIVE)
-  exitedAt        DateTime?
-  notes           String?
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
+  status               MeditationMemberStatus @default(ACTIVE)
+  exitedAt             DateTime?
+  whatsappGroupAddedAt DateTime?
+  notes                String?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
 
   @@index([status])
 }

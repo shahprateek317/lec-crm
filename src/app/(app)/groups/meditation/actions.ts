@@ -69,6 +69,19 @@ export async function updateMemberStatusAction(formData: FormData) {
   revalidatePath("/groups/meditation");
 }
 
+export async function markWhatsappGroupAddedAction(formData: FormData) {
+  await requireSession();
+  const clientId = String(formData.get("clientId") ?? "");
+  if (!clientId) throw new Error("Client required");
+
+  await prisma.meditationGroupMembership.update({
+    where: { clientId },
+    data: { whatsappGroupAddedAt: new Date(), updatedAt: new Date() },
+  });
+
+  revalidatePath("/groups/meditation");
+}
+
 export async function sendMeditationThankYouAction(formData: FormData) {
   await requireSession();
   const clientIds = String(formData.get("clientIds") ?? "").split(",").filter(Boolean);
