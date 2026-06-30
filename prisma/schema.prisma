@@ -780,6 +780,10 @@ model HealingSession {
   // 1-hour WhatsApp ping. NULL = "never sent" so the cron can dedupe.
   reminderSentAt DateTime?
 
+  // Public healing summary page — token sent to client via WA after session end.
+  // Route: /summary/<summaryToken>  (no login required; token is the auth).
+  summaryToken   String?   @unique
+
   creditEntry  CreditLedgerEntry?
   feedback     ClientFeedback?
   qualityNotes QualityNote[]

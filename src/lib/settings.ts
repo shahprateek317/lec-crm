@@ -32,6 +32,8 @@ export const SETTING_KEYS = {
   emailProvider:   "email.provider",    // "stub" | "resend"
   emailApiKey:     "email.api_key",     // Resend API key (sensitive)
   emailFromAddress: "email.from_address", // e.g. "Life Energy Centre <hello@lifeenergycentre.in>"
+
+  zoomIntroLink: "zoom.intro_link",    // Zoom link for Introduction to Pranic Healing sessions
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

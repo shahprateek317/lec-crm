@@ -185,21 +185,29 @@ export async function confirmCheckIn(token: string): Promise<{ phase: CheckInPha
         : { clientConfirmedEndAt: now },
   });
 
-  // Send healing summary WA pair after client confirms session end
+  // Send healing summary WA after client confirms session end
   if (found.phase === "end") {
-    const { sendStagePair } = await import("@/lib/followup-wa");
     const session = await prisma.healingSession.findUnique({
       where: { id: found.sessionId },
-      select: { clientId: true, startedAt: true, client: { select: { name: true, phone: true } } },
+      select: { clientId: true, startedAt: true, summaryToken: true, client: { select: { name: true, phone: true } } },
     });
     if (session?.client.phone) {
       const firstName = session.client.name.split(" ")[0];
       const dateStr = (session.startedAt ?? now).toLocaleDateString("en-IN", { day: "numeric", month: "long" });
-      // {{3}} = summary URL — Phase B will be a real per-session page; using portal root until then
-      const summaryUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://lifeenergycentre.in"}/portal`;
-      void sendStagePair("healing", {
+
+      let summaryToken = session.summaryToken;
+      if (!summaryToken) {
+        summaryToken = crypto.randomBytes(18).toString("base64url");
+        await prisma.healingSession.update({ where: { id: found.sessionId }, data: { summaryToken } });
+      }
+
+      const base = process.env.AUTH_URL?.replace(/\/$/, "") ?? "https://crm.lifeenergycentre.in";
+      const summaryUrl = `${base}/summary/${summaryToken}`;
+
+      void getWhatsAppProvider().sendTemplate({
         clientId: session.clientId,
         phone: session.client.phone,
+        templateName: "healing_summary_1",
         variables: [firstName, dateStr, summaryUrl],
       }).catch((err) => console.error("[check-in] healing summary WA failed", err));
     }
