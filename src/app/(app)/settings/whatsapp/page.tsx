@@ -7,7 +7,7 @@ import { isAdmin } from "@/lib/rbac";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FlashToaster } from "@/components/flash-toaster";
 import { getSettingPreview, SETTING_KEYS } from "@/lib/settings";
-import { saveWhatsAppAction, testWhatsAppAction, generateVerifyTokenAction } from "./actions";
+import { saveWhatsAppAction, testWhatsAppAction, generateVerifyTokenAction, saveZoomLinkAction } from "./actions";
 import { SubmitButton } from "@/components/submit-button";
 
 export const dynamic = "force-dynamic";
@@ -22,12 +22,13 @@ export default async function WhatsAppSettingsPage({
   if (!session?.user || !isAdmin(session.user.roles)) redirect("/dashboard");
   const sp = await searchParams;
 
-  const [provider, phoneId, token, verifyToken, appSecret] = await Promise.all([
+  const [provider, phoneId, token, verifyToken, appSecret, zoomIntroLink] = await Promise.all([
     getSettingPreview(SETTING_KEYS.whatsappProvider),
     getSettingPreview(SETTING_KEYS.whatsappPhoneId),
     getSettingPreview(SETTING_KEYS.whatsappToken),
     getSettingPreview(SETTING_KEYS.whatsappVerifyToken),
     getSettingPreview(SETTING_KEYS.whatsappAppSecret),
+    getSettingPreview(SETTING_KEYS.zoomIntroLink),
   ]);
 
   // Build absolute webhook URL from the current request host.
@@ -207,6 +208,36 @@ export default async function WhatsAppSettingsPage({
                 Test connection
               </SubmitButton>
             </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-xl">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            Introduction Session — Zoom Link
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form action={saveZoomLinkAction} className="space-y-3">
+            <div className="space-y-1.5">
+              <label htmlFor="zoomIntroLink" className="text-sm font-medium">Zoom Meeting Link</label>
+              <input
+                id="zoomIntroLink"
+                name="zoomIntroLink"
+                placeholder={zoomIntroLink.isSet ? zoomIntroLink.preview : "https://zoom.us/j/..."}
+                className={inputCls}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Used in the intro session invitation WhatsApp and the intro-blast bulk send.
+              </p>
+            </div>
+            <SubmitButton
+              pendingLabel="Saving…"
+              className="h-10 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              Save Zoom Link
+            </SubmitButton>
           </form>
         </CardContent>
       </Card>
