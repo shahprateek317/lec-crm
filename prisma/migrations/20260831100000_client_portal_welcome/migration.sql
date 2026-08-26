@@ -1,7 +1,7 @@
 INSERT INTO "WhatsAppTemplate" (id, name, category, language, "bodyTemplate", "createdAt", "updatedAt")
 VALUES (
   gen_random_uuid(),
-  'client_portal_welcome',
+  'client_portal_access',
   'UTILITY',
   'en',
   'Namaste {{1}} 🙏

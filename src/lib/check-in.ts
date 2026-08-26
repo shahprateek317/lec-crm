@@ -224,7 +224,7 @@ export async function confirmCheckIn(token: string): Promise<{ phase: CheckInPha
         void wa.sendTemplate({
           clientId: session.clientId,
           phone: session.client.phone,
-          templateName: "client_portal_welcome",
+          templateName: "client_portal_access",
           variables: [firstName],
         }).catch((err) => console.error("[check-in] portal welcome WA failed", err));
       }
