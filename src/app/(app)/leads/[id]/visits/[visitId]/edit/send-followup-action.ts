@@ -34,7 +34,7 @@ export async function sendVisitFollowupAction(formData: FormData) {
       .sendTemplate({
         clientId,
         phone,
-        templateName: "visit_followup",
+        templateName: "visit_followup_1",
         variables: [firstName, nextSteps],
       });
   }
