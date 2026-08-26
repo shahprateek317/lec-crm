@@ -203,13 +203,31 @@ export async function confirmCheckIn(token: string): Promise<{ phase: CheckInPha
 
       const base = process.env.AUTH_URL?.replace(/\/$/, "") ?? "https://crm.lifeenergycentre.in";
       const summaryUrl = `${base}/summary/${summaryToken}`;
+      const wa = getWhatsAppProvider();
 
-      void getWhatsAppProvider().sendTemplate({
+      void wa.sendTemplate({
         clientId: session.clientId,
         phone: session.client.phone,
         templateName: "healing_summary_1",
         variables: [firstName, dateStr, summaryUrl],
       }).catch((err) => console.error("[check-in] healing summary WA failed", err));
+
+      // Send portal welcome WA on first ever confirmed session end
+      const priorConfirmedSessions = await prisma.healingSession.count({
+        where: {
+          clientId: session.clientId,
+          clientConfirmedEndAt: { not: null },
+          id: { not: found.sessionId },
+        },
+      });
+      if (priorConfirmedSessions === 0) {
+        void wa.sendTemplate({
+          clientId: session.clientId,
+          phone: session.client.phone,
+          templateName: "client_portal_welcome",
+          variables: [firstName],
+        }).catch((err) => console.error("[check-in] portal welcome WA failed", err));
+      }
     }
   }
 
