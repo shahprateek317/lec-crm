@@ -47,6 +47,7 @@ type InboundMessage = {
   timestamp: string;
   type: string;
   text?: { body: string };
+  button?: { text: string; payload: string };
   interactive?: {
     type: "button_reply" | "list_reply";
     button_reply?: { id: string; title: string };
@@ -195,7 +196,8 @@ export async function POST(req: Request) {
 
         // Resolve message body — for button replies use the button title.
         // Meta sends button text as both .id and .title; we match on .title (lowercased).
-        const buttonTitle = msg.interactive?.button_reply?.title ?? null;
+        const buttonTitle =
+          msg.interactive?.button_reply?.title ?? msg.button?.text ?? null;
         const buttonKey = buttonTitle?.toLowerCase().trim() ?? null;
         const body = buttonTitle
           ? `[Button: ${buttonTitle}]`
