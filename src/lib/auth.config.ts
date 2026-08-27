@@ -62,6 +62,7 @@ export const authConfig = {
       // cookie via requireClient(), not NextAuth. They enforce their
       // own ownership checks in the route handlers.
       if (startsWithSeg("/api/me")) return true;
+      if (startsWithSeg("/api/me/faq")) return true;
       return !!auth;
     },
   },

@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
 import { Card, CardContent } from "@/components/ui/card";
-import { Users, Package, GraduationCap, MessagesSquare, Wallet, ClipboardList, Shield, Bell, Mail } from "lucide-react";
+import { Users, Package, GraduationCap, MessagesSquare, Wallet, ClipboardList, Shield, Bell, Mail, BookOpen } from "lucide-react";
 import { getSettingPreview, SETTING_KEYS } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +30,7 @@ export default async function SettingsPage() {
     { href: "/settings/razorpay", icon: Wallet,        title: "Razorpay",         description: "Connect your Razorpay account so real payment links go out.",
       status: razLive ? { label: "Live", tone: "bg-emerald-100 text-emerald-900" } : { label: "Demo mode", tone: "bg-amber-100 text-amber-900" } },
     { href: "/settings/payouts",   icon: Wallet,        title: "Healer payouts",   description: "Record monthly disbursements to healers. Track pending vs paid per period." },
+    { href: "/settings/knowledge-centre", icon: BookOpen, title: "Knowledge Centre", description: "Manage the FAQ shown to clients in their portal. Add, edit, deactivate entries." },
     { href: "/settings/audit-log", icon: ClipboardList, title: "Audit log",        description: "Who accessed what, and when. Append-only record of document views, thread opens, and admin actions." },
     { href: "/settings/notifications", icon: Bell,       title: "Notifications",    description: "Choose which in-app notifications you receive. All are on by default." },
     { href: "/settings/email",         icon: Mail,       title: "Email digest",     description: "Send staff a morning summary of their unread notifications via Resend." },

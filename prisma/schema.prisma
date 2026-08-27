@@ -1398,3 +1398,28 @@ model ClientSession {
   @@index([clientId])
   @@index([expiresAt])
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// Knowledge Centre / FAQ
+// ──────────────────────────────────────────────────────────────────────────
+
+model FaqEntry {
+  id             String    @id @default(cuid())
+  faqCode        String    @unique // e.g. FAQ-001
+  category       String
+  question       String
+  answer         String
+  keywords       String[]  @default([])
+  relatedService String?
+  displayOrder   Int       @default(0)
+  active         Boolean   @default(true)
+  internalNote   String?   // staff-only, not shown to clients
+  version        Int       @default(1)
+  lastReviewedAt DateTime?
+  reviewedBy     String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([category, displayOrder])
+  @@index([active])
+}

@@ -16,6 +16,7 @@ import {
   Sparkles,
   ChevronRight,
   FileText,
+  HelpCircle,
 } from "lucide-react";
 import { requireClient } from "@/lib/me-session";
 import { prisma } from "@/lib/prisma";
@@ -156,6 +157,11 @@ export default async function MeDashboardPage({
             href="/me/courses"
             icon={<GraduationCap className="h-4 w-4 text-violet-700" />}
             label="Courses"
+          />
+          <RowLink
+            href="/me/help"
+            icon={<HelpCircle className="h-4 w-4 text-amber-700" />}
+            label="Help & FAQ"
           />
         </CardContent>
       </Card>
