@@ -189,8 +189,41 @@ export async function confirmCheckIn(token: string): Promise<{ phase: CheckInPha
   if (found.phase === "end") {
     const session = await prisma.healingSession.findUnique({
       where: { id: found.sessionId },
-      select: { clientId: true, startedAt: true, summaryToken: true, client: { select: { name: true, phone: true } } },
+      select: {
+        clientId: true, startedAt: true, summaryToken: true, sessionType: true, creditUsed: true,
+        client: { select: { name: true, phone: true } },
+      },
     });
+
+    // Auto-deduct one credit for PAID sessions where creditUsed = true
+    if (session?.creditUsed && session.sessionType === "PAID") {
+      const alreadyDeducted = await prisma.creditLedgerEntry.findFirst({
+        where: { healingSessionId: found.sessionId, delta: -1 },
+        select: { id: true },
+      });
+      if (!alreadyDeducted) {
+        const agg = await prisma.creditLedgerEntry.aggregate({
+          where: { clientId: session.clientId },
+          _sum: { delta: true },
+        });
+        const balance = agg._sum.delta ?? 0;
+        if (balance > 0) {
+          await prisma.creditLedgerEntry.create({
+            data: {
+              clientId: session.clientId,
+              delta: -1,
+              balanceAfter: balance - 1,
+              reason: "Healing session",
+              healingSessionId: found.sessionId,
+            },
+          });
+          await prisma.client.update({
+            where: { id: session.clientId, stage: { in: ["VISIT_DONE", "HEALING_ACTIVE"] } },
+            data: { stage: "HEALING_ACTIVE" },
+          }).catch(() => void 0);
+        }
+      }
+    }
     if (session?.client.phone) {
       const firstName = session.client.name.split(" ")[0];
       const dateStr = (session.startedAt ?? now).toLocaleDateString("en-IN", { day: "numeric", month: "long" });
