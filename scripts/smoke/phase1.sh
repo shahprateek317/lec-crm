@@ -17,6 +17,12 @@
 
 set -uo pipefail
 
+# Ensure node is on PATH (installed via nvm in non-interactive shells)
+export NVM_DIR="$HOME/.nvm"
+# shellcheck disable=SC1091
+[ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh" --no-use
+export PATH="$NVM_DIR/versions/node/$(ls "$NVM_DIR/versions/node" | sort -V | tail -1)/bin:$PATH"
+
 URL=https://crm.lifeenergycentre.in
 COOKIE=$(mktemp); trap "rm -f $COOKIE" EXIT
 PASS=0
@@ -94,7 +100,7 @@ assert "$code" "200" "GET /sign-in returns 200"
 # ── Staff-authenticated surfaces ─────────────────────────────────────
 echo ""
 echo "═══ Staff: sign in as coordinator + visit /inbox"
-CSRF=$(curl -ksS -c $COOKIE "$URL/api/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["csrfToken"])')
+CSRF=$(curl -ksS -c $COOKIE "$URL/api/auth/csrf" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>process.stdout.write(JSON.parse(d).csrfToken))')
 curl -ksS -b $COOKIE -c $COOKIE -X POST "$URL/api/auth/callback/credentials" \
   --data-urlencode 'email=coordinator@lec.app' --data-urlencode 'password=demo1234' \
   --data-urlencode "csrfToken=$CSRF" --data-urlencode 'callbackUrl=/' \
@@ -110,7 +116,7 @@ assert_contains /tmp/inbox.html "Unknown"
 echo ""
 echo "═══ Staff: sign in as QC + visit /quality"
 rm -f $COOKIE
-CSRF=$(curl -ksS -c $COOKIE "$URL/api/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["csrfToken"])')
+CSRF=$(curl -ksS -c $COOKIE "$URL/api/auth/csrf" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>process.stdout.write(JSON.parse(d).csrfToken))')
 curl -ksS -b $COOKIE -c $COOKIE -X POST "$URL/api/auth/callback/credentials" \
   --data-urlencode 'email=quality@lec.app' --data-urlencode 'password=demo1234' \
   --data-urlencode "csrfToken=$CSRF" --data-urlencode 'callbackUrl=/' \
@@ -123,7 +129,7 @@ assert_contains /tmp/q.html "Quality"
 echo ""
 echo "═══ Staff: sign in as healer + visit /me/profile (cert upload UI)"
 rm -f $COOKIE
-CSRF=$(curl -ksS -c $COOKIE "$URL/api/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["csrfToken"])')
+CSRF=$(curl -ksS -c $COOKIE "$URL/api/auth/csrf" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>process.stdout.write(JSON.parse(d).csrfToken))')
 curl -ksS -b $COOKIE -c $COOKIE -X POST "$URL/api/auth/callback/credentials" \
   --data-urlencode 'email=healer@lec.app' --data-urlencode 'password=demo1234' \
   --data-urlencode "csrfToken=$CSRF" --data-urlencode 'callbackUrl=/' \

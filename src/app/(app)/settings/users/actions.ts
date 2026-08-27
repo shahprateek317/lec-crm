@@ -6,7 +6,37 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/rbac";
 import { createUser, ensureProfile } from "@/lib/users";
+import { sendEmail } from "@/lib/providers/email";
 import type { Role } from "@prisma/client";
+
+function welcomeEmailHtml(name: string, email: string, password: string, role: string): string {
+  const loginUrl = "https://crm.lifeenergycentre.in/sign-in";
+  const roleName = role.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+  return `<!DOCTYPE html>
+<html>
+<body style="font-family:Arial,sans-serif;background:#f9f9f9;margin:0;padding:32px;">
+  <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;padding:36px;border:1px solid #e5e7eb;">
+    <h2 style="color:#1a1a1a;margin-top:0;">Welcome to Life Energy Centre CRM</h2>
+    <p style="color:#444;">Namaste ${name},</p>
+    <p style="color:#444;">Your staff account has been created. Here are your login details:</p>
+    <table style="width:100%;margin:24px 0;border-collapse:collapse;">
+      <tr><td style="padding:8px 12px;background:#f3f4f6;border-radius:6px 6px 0 0;color:#6b7280;font-size:13px;">Role</td><td style="padding:8px 12px;background:#f3f4f6;border-radius:6px 6px 0 0;font-weight:600;">${roleName}</td></tr>
+      <tr><td style="padding:8px 12px;background:#f9fafb;color:#6b7280;font-size:13px;">Email</td><td style="padding:8px 12px;background:#f9fafb;font-weight:600;">${email}</td></tr>
+      <tr><td style="padding:8px 12px;background:#f3f4f6;border-radius:0 0 6px 6px;color:#6b7280;font-size:13px;">Password</td><td style="padding:8px 12px;background:#f3f4f6;border-radius:0 0 6px 6px;font-weight:600;font-family:monospace;">${password}</td></tr>
+    </table>
+    <a href="${loginUrl}" style="display:inline-block;background:#7c3aed;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;margin-bottom:24px;">Sign In to CRM</a>
+    <p style="color:#6b7280;font-size:13px;margin-top:24px;">Please change your password after signing in for the first time.</p>
+    <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">
+    <p style="color:#9ca3af;font-size:12px;margin:0;">Life Energy Centre · New Town, Kolkata</p>
+  </div>
+</body>
+</html>`;
+}
+
+function welcomeEmailText(name: string, email: string, password: string, role: string): string {
+  const roleName = role.replace(/_/g, " ");
+  return `Namaste ${name},\n\nYour Life Energy Centre CRM account has been created.\n\nRole: ${roleName}\nEmail: ${email}\nPassword: ${password}\n\nSign in at: https://crm.lifeenergycentre.in/sign-in\n\nPlease change your password after signing in.\n\nLife Energy Centre`;
+}
 
 const ROLES = [
   "SUPER_ADMIN", "ADMIN", "COORDINATOR", "COUNSELLOR", "SENIOR_COUNSELLOR",
@@ -16,16 +46,17 @@ const ROLES = [
 const createSchema = z.object({
   name: z.string().trim().min(2),
   email: z.string().email(),
-  role: z.enum(ROLES),
+  roles: z.array(z.enum(ROLES)).min(1),
   password: z.string().min(6),
 });
 
 export async function createUserAction(formData: FormData) {
   await requireAdmin();
+  const rolesRaw = formData.getAll("roles").map(String).filter(Boolean);
   const parsed = createSchema.safeParse({
     name: formData.get("name"),
     email: String(formData.get("email") ?? "").toLowerCase(),
-    role: formData.get("role"),
+    roles: rolesRaw.length > 0 ? rolesRaw : [formData.get("role")].filter(Boolean),
     password: formData.get("password"),
   });
   if (!parsed.success) {
@@ -38,6 +69,16 @@ export async function createUserAction(formData: FormData) {
   }
 
   const user = await createUser(parsed.data);
+  const primaryRole = user.roles[0] ?? "STAFF";
+
+  // Send welcome email — fire and forget so a mail failure doesn't block the redirect.
+  sendEmail({
+    to: user.email,
+    subject: "Welcome to Life Energy Centre CRM",
+    html: welcomeEmailHtml(user.name, user.email, parsed.data.password, primaryRole),
+    text: welcomeEmailText(user.name, user.email, parsed.data.password, primaryRole),
+  }).catch(err => console.error("[users] welcome email failed", err));
+
   revalidatePath("/settings/users");
   // Send the admin straight into the detail page to fill the rich profile.
   redirect(`/settings/users/${user.id}?ok=1`);
@@ -48,7 +89,7 @@ const basicsSchema = z.object({
   name: z.string().trim().min(2),
   phone: z.string().trim().optional().or(z.literal("")),
   whatsappPhone: z.string().trim().optional().or(z.literal("")),
-  role: z.enum(ROLES),
+  roles: z.array(z.enum(ROLES)).min(1),
   gender: z.enum(["MALE", "FEMALE", "OTHER", "PREFER_NOT_TO_SAY"]).optional().or(z.literal("")),
   dob: z.string().optional().or(z.literal("")),
   joiningDate: z.string().optional().or(z.literal("")),
@@ -61,11 +102,16 @@ const basicsSchema = z.object({
 
 export async function updateUserBasicsAction(formData: FormData) {
   await requireAdmin();
-  const parsed = basicsSchema.safeParse(Object.fromEntries(formData.entries()));
+  const rolesRaw = formData.getAll("roles").map(String).filter(Boolean);
+  // Fall back to legacy single `role` field if multi-select not present
+  const rolesSingle = String(formData.get("role") ?? "");
+  const rolesInput = rolesRaw.length > 0 ? rolesRaw : rolesSingle ? [rolesSingle] : [];
+  const entries = Object.fromEntries(formData.entries());
+  const parsed = basicsSchema.safeParse({ ...entries, roles: rolesInput });
   if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Invalid input");
 
   const before = await prisma.user.findUniqueOrThrow({ where: { id: parsed.data.id } });
-  const newRole = parsed.data.role as Role;
+  const newRoles = parsed.data.roles as Role[];
 
   await prisma.user.update({
     where: { id: parsed.data.id },
@@ -73,7 +119,7 @@ export async function updateUserBasicsAction(formData: FormData) {
       name: parsed.data.name,
       phone: parsed.data.phone || null,
       whatsappPhone: parsed.data.whatsappPhone || null,
-      role: newRole,
+      roles: newRoles,
       gender: parsed.data.gender ? (parsed.data.gender as "MALE") : null,
       dob: parsed.data.dob ? new Date(parsed.data.dob) : null,
       joiningDate: parsed.data.joiningDate ? new Date(parsed.data.joiningDate) : null,
@@ -85,9 +131,10 @@ export async function updateUserBasicsAction(formData: FormData) {
     },
   });
 
-  // If role changed, make sure the right profile exists for the new role.
-  if (before.role !== newRole) {
-    await ensureProfile(parsed.data.id, newRole);
+  // If roles changed, make sure the right profiles exist for all new roles.
+  const rolesAdded = newRoles.filter(r => !before.roles.includes(r));
+  for (const role of rolesAdded) {
+    await ensureProfile(parsed.data.id, role);
   }
 
   revalidatePath(`/settings/users/${parsed.data.id}`);
@@ -263,4 +310,22 @@ export async function resetPasswordAction(formData: FormData) {
   });
   revalidatePath(`/settings/users/${id}`);
   redirect(`/settings/users/${id}?ok=1`);
+}
+
+// ── Delete user ───────────────────────────────────────────────────────
+export async function deleteUserAction(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  if (!id) throw new Error("Missing user id");
+
+  // Remove non-cascade dependent records before deleting
+  await prisma.$transaction([
+    prisma.counselingSession.deleteMany({ where: { counsellorId: id } }),
+    prisma.visit.updateMany({ where: { assignedHealerId: id }, data: { assignedHealerId: null } }),
+    prisma.healingSession.deleteMany({ where: { healerId: id } }),
+  ]);
+
+  await prisma.user.delete({ where: { id } });
+  revalidatePath("/settings/users");
+  redirect("/settings/users?ok=deleted");
 }

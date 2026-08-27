@@ -43,7 +43,7 @@ export default async function MyProfilePage() {
   });
   if (!me) redirect("/sign-in");
 
-  const isHealer = me.role === "HEALER" || me.role === "SENIOR_HEALER";
+  const isHealer = me.roles.includes("HEALER") || me.roles.includes("SENIOR_HEALER");
 
   return (
     <div className="space-y-6">
@@ -76,7 +76,7 @@ export default async function MyProfilePage() {
         <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
           <Field label="Name"          value={me.name} />
           <Field label="Email"         value={me.email} />
-          <Field label="Role"          value={me.role.replace(/_/g, " ").toLowerCase()} />
+          <Field label="Role"          value={me.roles.map(r => r.replace(/_/g, " ").toLowerCase()).join(", ")} />
           <Field label="Employee code" value={me.employeeCode ?? "—"} />
         </CardContent>
       </Card>

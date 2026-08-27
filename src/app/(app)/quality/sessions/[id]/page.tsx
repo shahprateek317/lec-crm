@@ -38,7 +38,7 @@ export default async function QualitySessionPage({
   params: Promise<{ id: string }>;
 }) {
   const session = await auth();
-  if (!session?.user || !canAuditQuality(session.user.role)) redirect("/dashboard");
+  if (!session?.user || !canAuditQuality(session.user.roles)) redirect("/dashboard");
   const { id } = await params;
 
   const hs = await prisma.healingSession.findUnique({

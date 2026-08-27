@@ -58,7 +58,7 @@ export async function GET(): Promise<NextResponse> {
   // SUPER_ADMIN as the canonical "system" attribution. If none exists
   // (fresh install), we skip the audit write but still log the run.
   const systemActor = await prisma.user.findFirst({
-    where: { role: "SUPER_ADMIN", active: true },
+    where: { roles: { has: "SUPER_ADMIN" }, active: true },
     select: { id: true },
     orderBy: { createdAt: "asc" },
   });

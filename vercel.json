@@ -8,6 +8,18 @@
     {
       "path": "/api/cron/send-session-reminders",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-totp-enrollments",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/reconcile-orphan-s3-keys",
+      "schedule": "45 2 * * *"
+    },
+    {
+      "path": "/api/cron/send-daily-digest",
+      "schedule": "30 2 * * *"
     }
   ]
 }

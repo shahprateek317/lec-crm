@@ -21,6 +21,7 @@ export type SendTemplateInput = {
   phone: string;
   templateName: string;
   variables?: string[];
+  buttonSuffix?: string;
 };
 
 export type SendTextInput = {
@@ -253,6 +254,33 @@ class MetaWhatsAppProvider implements WhatsAppProvider {
     const tpl = await loadTemplate(input.templateName);
     const body = renderTemplate(tpl, input.variables ?? []);
     try {
+      const components: unknown[] = [];
+      if (input.variables?.length) {
+        components.push({ type: "body", parameters: input.variables.map((text) => ({ type: "text", text })) });
+      }
+      // Meta's AUTHENTICATION-category templates (currently just
+      // client_magic_link) render a "Copy code" URL button whose link
+      // embeds the same OTP — it needs its own button parameter, not just
+      // the body's. See the approved template's `components[].type ===
+      // "BUTTONS"` shape in WhatsApp Manager for the exact contract.
+      if (tpl.name === "client_magic_link" && input.variables?.[0]) {
+        components.push({
+          type: "button",
+          sub_type: "url",
+          index: "0",
+          parameters: [{ type: "text", text: input.variables[0] }],
+        });
+      }
+      // counseling_meeting_link has a dynamic URL button whose suffix is
+      // the meeting room code (last segment of the meetLink URL).
+      if (tpl.name === "counseling_meeting_link" && input.buttonSuffix) {
+        components.push({
+          type: "button",
+          sub_type: "url",
+          index: "0",
+          parameters: [{ type: "text", text: input.buttonSuffix }],
+        });
+      }
       const { messageId } = await this.post({
         messaging_product: "whatsapp",
         to: normalizePhone(input.phone),
@@ -260,9 +288,7 @@ class MetaWhatsAppProvider implements WhatsAppProvider {
         template: {
           name: tpl.name,
           language: { code: tpl.language },
-          components: input.variables?.length
-            ? [{ type: "body", parameters: input.variables.map((text) => ({ type: "text", text })) }]
-            : undefined,
+          components: components.length ? components : undefined,
         },
       });
       await recordMessage({

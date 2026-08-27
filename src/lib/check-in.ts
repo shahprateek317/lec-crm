@@ -184,5 +184,85 @@ export async function confirmCheckIn(token: string): Promise<{ phase: CheckInPha
         ? { clientConfirmedStartAt: now }
         : { clientConfirmedEndAt: now },
   });
+
+  // Send healing summary WA after client confirms session end
+  if (found.phase === "end") {
+    const session = await prisma.healingSession.findUnique({
+      where: { id: found.sessionId },
+      select: {
+        clientId: true, startedAt: true, summaryToken: true, sessionType: true, creditUsed: true,
+        client: { select: { name: true, phone: true } },
+      },
+    });
+
+    // Auto-deduct one credit for PAID sessions where creditUsed = true
+    if (session?.creditUsed && session.sessionType === "PAID") {
+      const alreadyDeducted = await prisma.creditLedgerEntry.findFirst({
+        where: { healingSessionId: found.sessionId, delta: -1 },
+        select: { id: true },
+      });
+      if (!alreadyDeducted) {
+        const agg = await prisma.creditLedgerEntry.aggregate({
+          where: { clientId: session.clientId },
+          _sum: { delta: true },
+        });
+        const balance = agg._sum.delta ?? 0;
+        if (balance > 0) {
+          await prisma.creditLedgerEntry.create({
+            data: {
+              clientId: session.clientId,
+              delta: -1,
+              balanceAfter: balance - 1,
+              reason: "Healing session",
+              healingSessionId: found.sessionId,
+            },
+          });
+          await prisma.client.update({
+            where: { id: session.clientId, stage: { in: ["VISIT_DONE", "HEALING_ACTIVE"] } },
+            data: { stage: "HEALING_ACTIVE" },
+          }).catch(() => void 0);
+        }
+      }
+    }
+    if (session?.client.phone) {
+      const firstName = session.client.name.split(" ")[0];
+      const dateStr = (session.startedAt ?? now).toLocaleDateString("en-IN", { day: "numeric", month: "long" });
+
+      let summaryToken = session.summaryToken;
+      if (!summaryToken) {
+        summaryToken = crypto.randomBytes(18).toString("base64url");
+        await prisma.healingSession.update({ where: { id: found.sessionId }, data: { summaryToken } });
+      }
+
+      const base = process.env.AUTH_URL?.replace(/\/$/, "") ?? "https://crm.lifeenergycentre.in";
+      const summaryUrl = `${base}/summary/${summaryToken}`;
+      const wa = getWhatsAppProvider();
+
+      void wa.sendTemplate({
+        clientId: session.clientId,
+        phone: session.client.phone,
+        templateName: "healing_summary_1",
+        variables: [firstName, dateStr, summaryUrl],
+      }).catch((err) => console.error("[check-in] healing summary WA failed", err));
+
+      // Send portal welcome WA on first ever confirmed session end
+      const priorConfirmedSessions = await prisma.healingSession.count({
+        where: {
+          clientId: session.clientId,
+          clientConfirmedEndAt: { not: null },
+          id: { not: found.sessionId },
+        },
+      });
+      if (priorConfirmedSessions === 0) {
+        void wa.sendTemplate({
+          clientId: session.clientId,
+          phone: session.client.phone,
+          templateName: "client_portal_access",
+          variables: [firstName],
+        }).catch((err) => console.error("[check-in] portal welcome WA failed", err));
+      }
+    }
+  }
+
   return { phase: found.phase, confirmedAt: now };
 }

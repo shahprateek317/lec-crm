@@ -93,18 +93,27 @@ export default async function InProgressSessionPage({
       </Card>
 
       {phase === "started" && (
-        <form action={endSessionAction}>
-          <input type="hidden" name="sessionId" value={hs.id} />
-          <SubmitButton
-            pendingLabel="Ending…"
-            className="h-12 w-full rounded-xl bg-primary text-base font-medium text-primary-foreground shadow-sm hover:bg-primary/90"
+        <div className="space-y-3">
+          {/* Step 1: healer must log chakras/remarks before ending */}
+          <Link
+            href={`/leads/${hs.client.id}/healing/new?inProgressSessionId=${hs.id}`}
+            className="inline-flex h-12 w-full items-center justify-center rounded-xl border-2 border-primary text-base font-medium text-primary hover:bg-primary/5"
           >
-            <Square className="mr-2 h-4 w-4" /> Mark session ended
-          </SubmitButton>
-          <p className="mt-2 text-center text-[11px] text-muted-foreground">
-            Sends the client a second WhatsApp link to confirm end time.
+            <FileText className="mr-2 h-4 w-4" /> Step 1 — Log session details
+          </Link>
+          <form action={endSessionAction}>
+            <input type="hidden" name="sessionId" value={hs.id} />
+            <SubmitButton
+              pendingLabel="Ending…"
+              className="h-12 w-full rounded-xl bg-primary text-base font-medium text-primary-foreground shadow-sm hover:bg-primary/90"
+            >
+              <Square className="mr-2 h-4 w-4" /> Step 2 — Mark session ended
+            </SubmitButton>
+          </form>
+          <p className="text-center text-[11px] text-muted-foreground">
+            Please log chakra details first, then mark ended. This sends the client a WhatsApp link to confirm.
           </p>
-        </form>
+        </div>
       )}
 
       {phase === "ended" && (

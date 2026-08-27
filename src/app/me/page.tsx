@@ -10,6 +10,7 @@ import {
   CalendarHeart,
   Coins,
   Gift,
+  GraduationCap,
   LogOut,
   Shield,
   Sparkles,
@@ -25,7 +26,12 @@ import { signOutAction, signOutAllAction, requestAccountDeletionAction } from ".
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Your portal · Life Energy Centre" };
 
-export default async function MeDashboardPage() {
+export default async function MeDashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const sp = await searchParams;
   const client = await requireClient("/me");
 
   // Pull the snapshot data the dashboard needs in a single round-trip.
@@ -146,6 +152,11 @@ export default async function MeDashboardPage() {
             icon={<FileText className="h-4 w-4 text-sky-700" />}
             label="Your documents"
           />
+          <RowLink
+            href="/me/courses"
+            icon={<GraduationCap className="h-4 w-4 text-violet-700" />}
+            label="Courses"
+          />
         </CardContent>
       </Card>
 
@@ -185,18 +196,38 @@ export default async function MeDashboardPage() {
             <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
               Delete my account
             </summary>
-            <div className="mt-3 space-y-2 rounded-lg border border-destructive/20 bg-destructive/5 p-3">
-              <p className="text-foreground">
-                Deletes your personal details from the portal. Your healing
-                history is retained anonymously for centre records. You can
-                cancel within 30 days by contacting the centre.
+            <div className="mt-3 space-y-3 rounded-lg border border-destructive/20 bg-destructive/5 p-4">
+              <p className="text-sm text-foreground">
+                Removes your personal details from the portal. Your healing
+                history is kept anonymously for centre records. You can cancel
+                within 30 days by contacting the centre.
               </p>
-              <form action={requestAccountDeletionAction}>
+              <p className="text-sm text-muted-foreground">
+                Type{" "}
+                <strong className="font-semibold text-foreground">
+                  {client.name.split(" ")[0]}
+                </strong>{" "}
+                to confirm.
+              </p>
+              {sp.error === "confirm_mismatch" && (
+                <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  That didn&apos;t match — type your first name exactly.
+                </p>
+              )}
+              <form action={requestAccountDeletionAction} className="flex flex-wrap items-end gap-2">
+                <input
+                  type="text"
+                  name="confirm"
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder={`Type "${client.name.split(" ")[0]}" to confirm`}
+                  className="h-10 w-52 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
                 <SubmitButton
                   pendingLabel="Deleting…"
-                  className="inline-flex h-8 items-center gap-1.5 rounded-md bg-destructive px-3 text-xs font-medium text-destructive-foreground hover:bg-destructive/90"
+                  className="inline-flex h-10 items-center gap-1.5 rounded-md bg-destructive px-3 text-sm font-medium text-destructive-foreground hover:bg-destructive/90"
                 >
-                  I understand — delete my account
+                  Delete my account
                 </SubmitButton>
               </form>
             </div>

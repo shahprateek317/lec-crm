@@ -6,9 +6,17 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { transitionStage } from "@/lib/pipeline";
 import { getWhatsAppProvider } from "@/lib/providers/whatsapp";
+import { sendStagePair } from "@/lib/followup-wa";
 import { pickHealer, pickCounsellor } from "@/lib/assignment";
 import { grantReferralReward } from "@/lib/referral";
+import { notifyMany } from "@/lib/notify";
 import { format } from "date-fns";
+import { randomBytes } from "node:crypto";
+
+function generateMeetLink(): string {
+  const code = randomBytes(5).toString("hex").toUpperCase();
+  return `https://meet.jit.si/LEC-${code}`;
+}
 
 // ── Counselling ─────────────────────────────────────────────────────────
 export const counselingScheduleSchema = z.object({
@@ -33,32 +41,54 @@ export async function scheduleCounseling(input: z.infer<typeof counselingSchedul
     counsellorId = picked.id;
   }
 
+  const meetLink = generateMeetLink();
   const session = await prisma.counselingSession.create({
     data: {
       clientId: parsed.clientId,
       counsellorId,
       scheduledAt: parsed.scheduledAt,
+      meetLink,
     },
     include: { counsellor: true, client: true },
   });
+  // Send confirmation WhatsApp fire-and-forget — must not be blocked
+  // by a stage transition error (e.g. lead still in NEW stage).
+  getWhatsAppProvider()
+    .sendTemplate({
+      clientId: parsed.clientId,
+      phone: session.client.phone,
+      templateName: "session_join_link",
+      variables: [
+        session.client.name.split(" ")[0],
+        format(parsed.scheduledAt, "dd MMM, HH:mm"),
+        session.counsellor.name,
+        meetLink,
+      ],
+    })
+    .catch((err) => console.error("[scheduling] counseling confirm WhatsApp failed", err));
+  // Notify the counsellor via WhatsApp (uses their whatsappPhone if set, else phone).
+  const counsellorPhone = session.counsellor.whatsappPhone ?? session.counsellor.phone;
+  if (counsellorPhone) {
+    getWhatsAppProvider()
+      .sendTemplate({
+        phone: counsellorPhone,
+        templateName: "counsellor_session_assigned",
+        variables: [
+          session.counsellor.name.split(" ")[0],
+          session.client.name,
+          format(parsed.scheduledAt, "dd MMM, HH:mm"),
+          meetLink,
+        ],
+      })
+      .catch((err) => console.error("[scheduling] counsellor notify WhatsApp failed", err));
+  }
+  // Stage transition is best-effort — the session is booked regardless.
   await transitionStage({
     clientId: parsed.clientId,
     toStage: "COUNSELING_SCHEDULED",
     byUserId: parsed.byUserId,
     note: `Counselling with ${session.counsellor.name} at ${format(parsed.scheduledAt, "dd MMM yyyy HH:mm")}`,
-  });
-  getWhatsAppProvider()
-    .sendTemplate({
-      clientId: parsed.clientId,
-      phone: session.client.phone,
-      templateName: "counseling_confirmation",
-      variables: [
-        session.client.name.split(" ")[0],
-        format(parsed.scheduledAt, "dd MMM, HH:mm"),
-        session.counsellor.name,
-      ],
-    })
-    .catch((err) => console.error("[scheduling] counseling confirm WhatsApp failed", err));
+  }).catch((err) => console.error("[scheduling] stage transition failed (non-fatal):", err?.message));
   return session;
 }
 
@@ -95,14 +125,90 @@ export async function completeCounseling(input: z.infer<typeof counselingComplet
     byUserId: parsed.byUserId,
   });
   const client = await prisma.client.findUniqueOrThrow({ where: { id: session.clientId } });
+  sendStagePair("counselling", {
+    clientId: client.id,
+    phone: client.phone,
+    variables: [client.name.split(" ")[0]],
+  }).catch((err) => console.error("[scheduling] counselling followup WhatsApp failed", err));
+  // Notify all coordinators and admins that counselling is done.
+  const coordinators = await prisma.user.findMany({
+    where: { roles: { hasSome: ["COORDINATOR", "ADMIN", "SUPER_ADMIN"] } },
+    select: { id: true },
+  });
+  await notifyMany(
+    coordinators.map((u) => u.id),
+    {
+      kind: "OTHER",
+      title: `Counselling done — ${client.name}`,
+      body: `Session with ${client.name} has been completed. Follow up with next steps.`,
+      href: `/leads/${client.id}`,
+    },
+  );
+  return session;
+}
+
+// ── Healing sessions (advance scheduling) ───────────────────────────────
+export const healingScheduleSchema = z.object({
+  clientId: z.string().min(1),
+  healerId: z.string().min(1),
+  mode: z.enum(["IN_PERSON", "DISTANT"]).default("IN_PERSON"),
+  scheduledAt: z.coerce.date(),
+  byUserId: z.string().min(1),
+});
+
+export async function scheduleHealingSession(input: z.infer<typeof healingScheduleSchema>) {
+  const parsed = healingScheduleSchema.parse(input);
+
+  const meetLink = parsed.mode === "DISTANT" ? generateMeetLink() : null;
+
+  const session = await prisma.healingSession.create({
+    data: {
+      clientId: parsed.clientId,
+      healerId: parsed.healerId,
+      mode: parsed.mode,
+      scheduledAt: parsed.scheduledAt,
+      meetLink,
+      // date stays default(now()) — will be overwritten when session is logged
+    },
+    include: { healer: true, client: true },
+  });
+
+  const dateStr = format(parsed.scheduledAt, "dd MMM, HH:mm");
+
+  // Notify client via WhatsApp
   getWhatsAppProvider()
     .sendTemplate({
-      clientId: client.id,
-      phone: client.phone,
-      templateName: "visit_invitation",
-      variables: [client.name.split(" ")[0]],
+      clientId: parsed.clientId,
+      phone: session.client.phone,
+      templateName: parsed.mode === "DISTANT" ? "healing_session_link" : "healing_session_confirmed",
+      variables: parsed.mode === "DISTANT"
+        ? [session.client.name.split(" ")[0], dateStr, session.healer.name, meetLink!]
+        : [session.client.name.split(" ")[0], dateStr, session.healer.name],
     })
-    .catch((err) => console.error("[scheduling] visit invitation WhatsApp failed", err));
+    .catch((err) => console.error("[scheduling] healing client WhatsApp failed", err));
+
+  // Notify healer via WhatsApp
+  const healerPhone = session.healer.whatsappPhone ?? session.healer.phone;
+  if (healerPhone) {
+    getWhatsAppProvider()
+      .sendTemplate({
+        phone: healerPhone,
+        templateName: parsed.mode === "DISTANT" ? "healer_healing_link" : "healer_healing_assigned",
+        variables: parsed.mode === "DISTANT"
+          ? [session.healer.name.split(" ")[0], session.client.name, dateStr, meetLink!]
+          : [session.healer.name.split(" ")[0], session.client.name, dateStr],
+      })
+      .catch((err) => console.error("[scheduling] healing healer WhatsApp failed", err));
+  }
+
+  // In-app notification to healer
+  await notifyMany([parsed.healerId], {
+    kind: "OTHER",
+    title: `New healing session — ${session.client.name}`,
+    body: `${parsed.mode === "DISTANT" ? "Distant" : "In-person"} session with ${session.client.name} on ${dateStr}.`,
+    href: `/leads/${parsed.clientId}`,
+  });
+
   return session;
 }
 
@@ -146,7 +252,7 @@ export async function scheduleVisit(input: z.infer<typeof visitScheduleSchema>) 
       clientId: parsed.clientId,
       phone: client.phone,
       templateName: "visit_confirmation",
-      variables: [format(parsed.scheduledAt, "dd MMM, HH:mm")],
+      variables: [client.name, format(parsed.scheduledAt, "dd MMM, HH:mm")],
     })
     .catch((err) => console.error("[scheduling] visit confirm WhatsApp failed", err));
 
@@ -171,12 +277,26 @@ export async function scheduleVisit(input: z.infer<typeof visitScheduleSchema>) 
         })
         .catch((err) => console.error("[scheduling] healer_assignment WhatsApp failed", err));
     }
+    if (assignedHealerId) {
+      await notifyMany([assignedHealerId], {
+        kind: "OTHER",
+        title: `New visit — ${client.name}`,
+        body: `You have a session with ${client.name} on ${format(parsed.scheduledAt, "dd MMM, HH:mm")}.`,
+        href: `/leads/${client.id}`,
+      });
+    }
   }
   return visit;
 }
 
 export const visitCompleteSchema = z.object({
   visitId: z.string().min(1),
+  problemsDiscussed: z.string().max(10000).optional(),
+  healingExplained: z.string().max(5000).optional(),
+  demoHealingDone: z.boolean().optional(),
+  demoChakrasBefore: z.record(z.string(), z.string()).optional(),
+  demoChakrasAfter: z.record(z.string(), z.string()).optional(),
+  demoHealingNotes: z.string().max(5000).optional(),
   initialFeedback: z.string().max(5000).optional(),
   notes: z.string().max(5000).optional(),
   byUserId: z.string().min(1),
@@ -188,6 +308,12 @@ export async function completeVisit(input: z.infer<typeof visitCompleteSchema>) 
     where: { id: parsed.visitId },
     data: {
       visitedAt: new Date(),
+      problemsDiscussed: parsed.problemsDiscussed,
+      healingExplained: parsed.healingExplained,
+      demoHealingDone: parsed.demoHealingDone ?? false,
+      demoChakrasBefore: parsed.demoChakrasBefore ?? undefined,
+      demoChakrasAfter: parsed.demoChakrasAfter ?? undefined,
+      demoHealingNotes: parsed.demoHealingNotes,
       initialFeedback: parsed.initialFeedback,
       notes: parsed.notes,
     },
@@ -197,10 +323,22 @@ export async function completeVisit(input: z.infer<typeof visitCompleteSchema>) 
     toStage: "VISIT_DONE",
     byUserId: parsed.byUserId,
   });
-  // Referral reward — if this client was referred by another client, the
-  // referrer earns a healing credit. Idempotent (DB unique on reason),
-  // fire-and-forget so a referral hiccup never blocks visit completion.
+  // Referral reward — fire-and-forget so a hiccup never blocks visit completion.
   void grantReferralReward(visit.clientId, "CENTRE_VISIT")
     .catch((err) => console.error("[referral] CENTRE_VISIT grant failed", err));
+
+  // Send visit follow-up WhatsApp with next-step buttons
+  const visitClient = await prisma.client.findUnique({
+    where: { id: visit.clientId },
+    select: { id: true, name: true, phone: true },
+  });
+  if (visitClient) {
+    sendStagePair("visit", {
+      clientId: visitClient.id,
+      phone: visitClient.phone,
+      variables: [visitClient.name.split(" ")[0]],
+    }).catch((err) => console.error("[scheduling] visit followup WhatsApp failed", err));
+  }
+
   return visit;
 }

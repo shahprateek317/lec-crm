@@ -19,6 +19,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { decryptFromStorage } from "@/lib/crypto";
 import { buildOtpAuthUrl, TOTP_ISSUER } from "@/lib/totp";
+import { remainingBackupCodeCount, WARN_THRESHOLD } from "@/lib/backup-codes";
 import { Card, CardContent } from "@/components/ui/card";
 import { SubmitButton } from "@/components/submit-button";
 import {
@@ -34,7 +35,7 @@ export const metadata = { title: "Security · Settings" };
 export default async function SecurityPage({
   searchParams,
 }: {
-  searchParams: Promise<{ step?: string; error?: string; ok?: string }>;
+  searchParams: Promise<{ step?: string; error?: string; ok?: string; codes?: string }>;
 }) {
   const session = await auth();
   if (!session?.user) redirect("/sign-in?callbackUrl=/settings/security");
@@ -45,6 +46,19 @@ export default async function SecurityPage({
     select: { id: true, email: true, totpSecret: true, totpEnabledAt: true },
   });
   if (!user) redirect("/sign-in?callbackUrl=/settings/security");
+
+  // Parse one-time backup codes passed from the enrollment action.
+  let newBackupCodes: string[] | null = null;
+  if (sp.codes) {
+    try {
+      newBackupCodes = JSON.parse(Buffer.from(sp.codes, "base64url").toString("utf8")) as string[];
+    } catch { /* ignore malformed param */ }
+  }
+
+  // Count remaining backup codes for the low-codes warning.
+  const remainingCodes = user.totpEnabledAt
+    ? await remainingBackupCodeCount(user.id)
+    : null;
 
   const state: "off" | "pending" | "active" = user.totpEnabledAt
     ? "active"
@@ -75,7 +89,7 @@ export default async function SecurityPage({
         </p>
       </header>
 
-      {sp.ok === "enabled" && <Banner kind="success">Two-factor authentication is now active.</Banner>}
+      {sp.ok === "enabled" && !newBackupCodes && <Banner kind="success">Two-factor authentication is now active.</Banner>}
       {sp.ok === "disabled" && <Banner kind="success">Two-factor authentication has been disabled.</Banner>}
       {sp.error === "wrong_code" && <Banner kind="error">That code didn&apos;t match. Try again with the latest 6-digit code.</Banner>}
       {sp.error === "invalid_code" && <Banner kind="error">Please enter the 6-digit code from your authenticator app.</Banner>}
@@ -87,8 +101,42 @@ export default async function SecurityPage({
       {state === "pending" && (
         <PendingCard userEmail={user.email} encryptedSecret={user.totpSecret!} />
       )}
+      {/* One-time backup codes display (shown immediately after enrollment) */}
+      {newBackupCodes && (
+        <Card className="rounded-2xl border-emerald-200 bg-emerald-50/60">
+          <CardContent className="space-y-4 py-5">
+            <div>
+              <p className="flex items-center gap-2 font-medium text-emerald-900">
+                <CheckCircle className="h-4 w-4" />
+                Two-factor authentication is now active
+              </p>
+              <p className="mt-1 text-sm text-emerald-800">
+                Save these 10 backup codes somewhere safe (password manager,
+                printed paper). Each can be used <strong>once</strong> to sign
+                in if you lose your phone. They won&apos;t be shown again.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-1 rounded-lg border border-emerald-200 bg-white p-3 font-mono text-sm sm:grid-cols-5">
+              {newBackupCodes.map((code) => (
+                <span key={code} className="text-center tracking-wider text-foreground">
+                  {code}
+                </span>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Low backup codes warning */}
+      {remainingCodes !== null && remainingCodes <= WARN_THRESHOLD && !newBackupCodes && (
+        <Banner kind="error">
+          You only have {remainingCodes} backup code{remainingCodes === 1 ? "" : "s"} left.
+          {" "}Generate new backup codes from the Security settings — old ones will be invalidated.
+        </Banner>
+      )}
+
       {state === "active" && user.totpEnabledAt && (
-        <ActiveCard enabledAt={user.totpEnabledAt} />
+        <ActiveCard enabledAt={user.totpEnabledAt} remainingCodes={remainingCodes} />
       )}
     </div>
   );
@@ -248,7 +296,7 @@ async function PendingCard({
 
 // ── State: 2FA active ────────────────────────────────────────────────
 
-function ActiveCard({ enabledAt }: { enabledAt: Date }) {
+function ActiveCard({ enabledAt, remainingCodes }: { enabledAt: Date; remainingCodes: number | null }) {
   return (
     <div className="space-y-4">
       <Card className="rounded-2xl border-emerald-200 bg-emerald-50/60">
@@ -261,6 +309,11 @@ function ActiveCard({ enabledAt }: { enabledAt: Date }) {
               be asked for a 6-digit code from your authenticator app
               every time you sign in.
             </p>
+            {remainingCodes !== null && (
+              <p className={`text-xs ${remainingCodes <= WARN_THRESHOLD ? "font-medium text-destructive" : "text-emerald-900/70"}`}>
+                {remainingCodes} backup code{remainingCodes !== 1 ? "s" : ""} remaining
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>

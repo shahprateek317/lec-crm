@@ -29,7 +29,8 @@ export async function regenerateWebhookSecretAction() {
   const secret = "whsec_" + crypto.randomBytes(24).toString("base64url");
   await setSetting(SETTING_KEYS.razorpayWebhookSecret, secret, session.user.id);
   revalidatePath("/settings/razorpay");
-  redirect("/settings/razorpay?ok=1");
+  // Pass the plain secret once so the admin can copy it into Razorpay.
+  redirect(`/settings/razorpay?newsecret=${encodeURIComponent(secret)}`);
 }
 
 export async function testRazorpayAction() {

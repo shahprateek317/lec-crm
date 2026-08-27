@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+﻿import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, Plus, Lock } from "lucide-react";
 import { auth } from "@/lib/auth";
@@ -16,7 +16,7 @@ export default async function CoursesSettingsPage({
   searchParams: Promise<{ error?: string; ok?: string }>;
 }) {
   const session = await auth();
-  if (!session?.user || !isAdmin(session.user.role)) redirect("/dashboard");
+  if (!session?.user || !isAdmin(session.user.roles)) redirect("/dashboard");
   const sp = await searchParams;
 
   const courses = await prisma.course.findMany({
@@ -51,7 +51,7 @@ export default async function CoursesSettingsPage({
           </div>
           <form action={createCourseAction} className="grid gap-3 md:grid-cols-[2fr_1fr_1fr_auto]">
             <input name="name" placeholder="Course name" required minLength={2} className={inputCls} />
-            <input name="fee" type="number" min={0} placeholder="Fee (₹)" required className={inputCls} />
+            <input name="fee" type="number" min={0} placeholder="Fee (â‚¹)" required className={inputCls} />
             <input name="durationHours" type="number" min={1} placeholder="Hours" className={inputCls} />
             <button type="submit" className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
               Add
@@ -77,7 +77,7 @@ export default async function CoursesSettingsPage({
                 <input type="hidden" name="id" value={c.id} />
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <input name="name" defaultValue={c.name} required minLength={2} className={inputCls} />
-                  <input name="fee" type="number" min={0} defaultValue={c.fee} required className={inputCls} placeholder="Fee ₹" />
+                  <input name="fee" type="number" min={0} defaultValue={c.fee} required className={inputCls} placeholder="Fee â‚¹" />
                   <input name="durationHours" type="number" min={0} defaultValue={c.durationHours ?? ""} className={inputCls} placeholder="Hours" />
                   <label className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm">
                     <input type="checkbox" name="active" value="true" defaultChecked={c.active} className="h-4 w-4" />
@@ -118,7 +118,7 @@ export default async function CoursesSettingsPage({
                 <form action={addPrereqAction} className="flex gap-2">
                   <input type="hidden" name="courseId" value={c.id} />
                   <select name="prerequisiteId" defaultValue="" required className={`${inputCls} flex-1`}>
-                    <option value="" disabled>Add a prerequisite…</option>
+                    <option value="" disabled>Add a prerequisiteâ€¦</option>
                     {courses
                       .filter((o) => o.id !== c.id && !c.prerequisites.some((p) => p.prerequisiteId === o.id))
                       .map((o) => (

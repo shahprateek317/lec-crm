@@ -19,7 +19,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSetting, SETTING_KEYS } from "@/lib/settings";
 import { verifyWhatsAppSignature } from "@/lib/webhook-signing";
-import { touchThread } from "@/lib/providers/whatsapp";
+import { touchThread, getWhatsAppProvider } from "@/lib/providers/whatsapp";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -47,7 +47,95 @@ type InboundMessage = {
   timestamp: string;
   type: string;
   text?: { body: string };
+  button?: { text: string; payload: string };
+  interactive?: {
+    type: "button_reply" | "list_reply";
+    button_reply?: { id: string; title: string };
+  };
 };
+
+// Maps button text (as entered in Meta template manager) → nextAction enum.
+// Meta sends the button text as the payload — there is no separate Button ID field.
+// Keys are lowercase-trimmed for case-insensitive matching.
+const BUTTON_ACTION_MAP: Record<string, string> = {
+  // New Lead stage (lead_welcome / lead_followup_options)
+  "book free counselling":        "COUNSELLING",
+  "join introduction session":    "INTRO_PRANIC_HEALING_GROUP",
+  "join weekly meditation":       "MEDITATION_GROUP",
+  "request callback":             "TELEPHONIC_CALL",
+  // Counselling Done stage (counselling_followup_1/2)
+  "book centre visit":            "CENTER_VISIT_DEMO_HEALING",
+  "join meditation":              "MEDITATION_GROUP",
+  // Centre Visit Done stage (visit_followup_1/2)
+  "continue paid healing":        "PAID_HEALING",
+  "purchase package":             "PAID_HEALING",
+  "join basic course":            "COURSE_ENROLLMENT",
+  "need more time":               "TELEPHONIC_CALL",
+  // Healing Summary stage (healing_summary_1/2)
+  "book next healing":            "CENTER_VISIT_DEMO_HEALING",
+  "join meditation group":        "MEDITATION_GROUP",
+  "learn pranic healing":         "COURSE_ENROLLMENT",
+  "contact counsellor":           "COUNSELLING",
+  // Package Client stage (package_client_1/2)
+  "book next session":            "CENTER_VISIT_DEMO_HEALING",
+  "join course":                  "COURSE_ENROLLMENT",
+  "renew package":                "PAID_HEALING",
+  // Dormant stage (dormant_reactivation)
+  "book healing":                 "CENTER_VISIT_DEMO_HEALING",
+  "talk to counsellor":           "COUNSELLING",
+  // Need More Time / callback stage
+  "contact me later":             "TELEPHONIC_CALL",
+  "remind me later":              "TELEPHONIC_CALL",
+  "i'd like to discuss":          "TELEPHONIC_CALL",
+  "book free healing":            "CENTER_VISIT_DEMO_HEALING",
+  "book single healing":          "CENTER_VISIT_DEMO_HEALING",
+  "book first session":           "CENTER_VISIT_DEMO_HEALING",
+  "continue healing":             "PAID_HEALING",
+  "healing packages":             "PAID_HEALING",
+  "explore healing packages":     "PAID_HEALING",
+  "view packages":                "PAID_HEALING",
+  "view healing packages":        "PAID_HEALING",
+  "reserve my seat":              "MEDITATION_GROUP",
+  "register now":                 "INTRO_PRANIC_HEALING_GROUP",
+  "join introduction again":      "INTRO_PRANIC_HEALING_GROUP",
+  "learn about the course":       "COURSE_ENROLLMENT",
+  "course details":               "COURSE_ENROLLMENT",
+  "reserve seat":                 "COURSE_ENROLLMENT",
+  "reserve my seat (course)":     "COURSE_ENROLLMENT",
+  "explore advanced courses":     "COURSE_ENROLLMENT",
+  // Pranic Group (pranic_group_followup_1/2)
+  "centre visit + demo":          "CENTER_VISIT_DEMO_HEALING",
+  // Course buttons
+  "join meditation first":        "MEDITATION_GROUP",
+  "reserve seat (course)":        "COURSE_ENROLLMENT",
+  // Meditation Group (meditation_followup_1/2)
+  "pranic healing intro":         "INTRO_PRANIC_HEALING_GROUP",
+  // Legacy / fallback button texts from older templates
+  "counselling":                  "COUNSELLING",
+  "pranic healing demo":          "CENTER_VISIT_DEMO_HEALING",
+  "meditation group":             "MEDITATION_GROUP",
+  "book a call":                  "TELEPHONIC_CALL",
+  "centre visit":                 "CENTER_VISIT_DEMO_HEALING",
+  "pranic intro group":           "INTRO_PRANIC_HEALING_GROUP",
+  "distant demo healing":         "CENTER_VISIT_DEMO_HEALING",
+  "further demo healing":         "CENTER_VISIT_DEMO_HEALING",
+  "paid healing package":         "PAID_HEALING",
+  "request a telecall":           "TELEPHONIC_CALL",
+  "interested in courses":        "COURSE_ENROLLMENT",
+};
+
+// Button texts that also set leadStatus = NOT_INTERESTED
+const NOT_INTERESTED_BUTTONS = new Set(["not interested", "close for now"]);
+
+// Button texts that exit the meditation group
+const EXIT_MEDITATION_BUTTONS = new Set(["exit meditation group"]);
+
+// Feedback / progress rating buttons — notify coordinator but don't change nextAction
+const FEEDBACK_RATING_BUTTONS = new Set([
+  "excellent", "good", "average", "needs improvement", "needs attention",
+  "feeling better", "slight improvement", "no significant change",
+  "i'm doing well", "write review", "refer a friend", "i'm interested",
+]);
 
 export async function POST(req: Request) {
   // Read raw bytes BEFORE any JSON parsing — Meta signs the exact body.
@@ -101,9 +189,22 @@ export async function POST(req: Request) {
         // clientId = null and are rendered as "Unknown sender" threads
         // in /inbox (Phase 1b).
         const phone = "+" + msg.from;
-        const client = await prisma.client.findUnique({ where: { phone } });
-        const body = msg.text?.body ?? `[${msg.type}]`;
+        const client = await prisma.client.findUnique({
+          where: { phone },
+          select: { id: true, name: true, assignedToId: true, leadStatus: true },
+        });
+
+        // Resolve message body — for button replies use the button title.
+        // Meta sends button text as both .id and .title; we match on .title (lowercased).
+        const buttonTitle =
+          msg.interactive?.button_reply?.title ?? msg.button?.text ?? null;
+        const buttonKey = buttonTitle?.toLowerCase().trim() ?? null;
+        const body = buttonTitle
+          ? `[Button: ${buttonTitle}]`
+          : msg.text?.body ?? `[${msg.type}]`;
+
         const sentAt = new Date(Number(msg.timestamp) * 1000);
+
         // Idempotent: Meta retries the entire webhook payload if we
         // don't 2xx within ~20s. providerMessageId is the natural key.
         await prisma.whatsAppMessage.upsert({
@@ -119,6 +220,103 @@ export async function POST(req: Request) {
           },
           update: {}, // no-op on retry; the original write is canonical
         });
+
+        // ── Button reply: auto-update lead next action ─────────────────
+        if (buttonKey && client?.id) {
+          // FEEDBACK RATING: notify coordinator with the rating
+          if (FEEDBACK_RATING_BUTTONS.has(buttonKey) && client.assignedToId) {
+            await prisma.notification.create({
+              data: {
+                recipientId: client.assignedToId,
+                kind: "OTHER",
+                title: `${client.name} rated their experience: ${buttonTitle}`,
+                body: "Tap to open their lead.",
+                href: `/leads/${client.id}`,
+              },
+            }).catch((err) => console.error("[whatsapp webhook] feedback notify failed", err));
+          }
+
+          // EXIT_MEDITATION: mark membership as EXITED
+          if (EXIT_MEDITATION_BUTTONS.has(buttonKey)) {
+            await prisma.meditationGroupMembership.updateMany({
+              where: { clientId: client.id },
+              data: { status: "EXITED", updatedAt: new Date() },
+            }).catch((err) => console.error("[whatsapp webhook] meditation exit failed", err));
+          }
+
+          const nextAction = BUTTON_ACTION_MAP[buttonKey] ?? null;
+
+          // JOIN_MEDITATION: auto-add to membership when client taps any meditation button
+          if (nextAction === "MEDITATION_GROUP") {
+            const wasAlreadyMember = await prisma.meditationGroupMembership.findUnique({
+              where: { clientId: client.id },
+              select: { status: true },
+            });
+            await prisma.meditationGroupMembership.upsert({
+              where: { clientId: client.id },
+              create: { clientId: client.id, status: "ACTIVE", joinedAt: new Date(), updatedAt: new Date() },
+              update: { status: "ACTIVE", updatedAt: new Date() },
+            }).catch((err) => console.error("[whatsapp webhook] meditation auto-add failed", err));
+
+            // Only notify + welcome on first join (not on re-activation)
+            if (!wasAlreadyMember) {
+              if (client.assignedToId) {
+                prisma.notification.create({
+                  data: {
+                    recipientId: client.assignedToId,
+                    kind: "OTHER",
+                    title: `Add ${client.name} to Meditation WhatsApp Group`,
+                    body: `Phone: ${phone} — New meditation group member.`,
+                    href: `/leads/${client.id}`,
+                  },
+                }).catch((err) => console.error("[whatsapp webhook] meditation notify failed", err));
+              }
+              const wa = getWhatsAppProvider();
+              wa.sendTemplate({
+                clientId: client.id,
+                phone,
+                templateName: "meditation_group_welcome",
+                variables: [client.name.split(" ")[0]],
+              }).catch((err) => console.error("[whatsapp webhook] meditation welcome WA failed", err));
+            }
+          }
+          const newLeadStatus = NOT_INTERESTED_BUTTONS.has(buttonKey) ? "NOT_INTERESTED" : null;
+
+          if (nextAction || newLeadStatus) {
+            await prisma.client.update({
+              where: { id: client.id },
+              data: {
+                ...(nextAction ? { nextAction: nextAction as never } : {}),
+                ...(newLeadStatus ? { leadStatus: newLeadStatus as never } : {}),
+              },
+            }).catch((err) => console.error("[whatsapp webhook] button nextAction update failed", err));
+
+            // Notify assigned coordinator
+            if (client.assignedToId) {
+              const ACTION_LABEL: Record<string, string> = {
+                COUNSELLING:                  "wants Counselling",
+                CENTER_VISIT_DEMO_HEALING:    "wants a Centre Visit / Demo Healing",
+                INTRO_PRANIC_HEALING_GROUP:   "wants to join Pranic Intro Group",
+                MEDITATION_GROUP:             "wants to join Meditation Group",
+                TELEPHONIC_CALL:              "requested a Telecall",
+                PAID_HEALING:                 "is interested in Paid Healing",
+                COURSE_ENROLLMENT:            "is interested in Courses",
+                NOT_INTERESTED:               "is Not Interested",
+              };
+              const label = nextAction ? (ACTION_LABEL[nextAction] ?? buttonTitle) : "is Not Interested";
+              await prisma.notification.create({
+                data: {
+                  recipientId: client.assignedToId,
+                  kind: "OTHER",
+                  title: `${client.name} ${label}`,
+                  body: "Tap to open their lead and take action.",
+                  href: `/leads/${client.id}`,
+                },
+              }).catch((err) => console.error("[whatsapp webhook] button notify failed", err));
+            }
+          }
+        }
+
         // Bump the thread aggregate for matched clients. Unknown senders
         // are handled by /inbox's orphan view (Phase 1b) — no thread row.
         if (client?.id) {

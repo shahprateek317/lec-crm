@@ -23,6 +23,8 @@ import {
   UserCircle,
   TrendingUp,
   Shield,
+  Bell,
+  UsersRound,
 } from "lucide-react";
 
 const NAV: Array<{ href: string; label: string; short: string; icon: React.ComponentType<{ className?: string }>; roles?: string[] }> = [
@@ -32,8 +34,11 @@ const NAV: Array<{ href: string; label: string; short: string; icon: React.Compo
   { href: "/schedule",        label: "Counselling & Visits", short: "Schedule",   icon: CalendarDays },
   { href: "/healing",         label: "Healing Sessions",     short: "Healing",    icon: Sparkles },
   { href: "/distant-healing", label: "Distant Healing",      short: "Distant",    icon: MessagesSquare },
+  { href: "/groups/pranic",   label: "Pranic Intro Group",   short: "PH Group",   icon: UsersRound },
+  { href: "/groups/meditation", label: "Meditation Group",   short: "Meditation", icon: UsersRound },
   { href: "/payments",        label: "Payments & Credits",   short: "Payments",   icon: Wallet },
   { href: "/courses",         label: "Courses",              short: "Courses",    icon: GraduationCap },
+  { href: "/inbox",           label: "WhatsApp Inbox",       short: "Inbox",      icon: MessagesSquare },
   { href: "/follow-ups",      label: "Follow-ups",           short: "Follow-ups", icon: Clock },
   { href: "/me/profile",      label: "My profile",           short: "Me",         icon: UserCircle, roles: ["HEALER", "SENIOR_HEALER"] },
   { href: "/my-earnings",     label: "My earnings",          short: "Earnings",   icon: TrendingUp, roles: ["HEALER", "SENIOR_HEALER"] },
@@ -45,8 +50,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const session = await auth();
   if (!session?.user) redirect("/sign-in?callbackUrl=/dashboard");
 
-  const visible = NAV.filter((n) => !n.roles || n.roles.includes(session.user.role));
-  const roleLabel = t.roles[session.user.role as keyof typeof t.roles] ?? session.user.role;
+  const visible = NAV.filter((n) => !n.roles || session.user.roles.some(r => n.roles!.includes(r)));
+  const primaryRole = session.user.roles[0];
+  const roleLabel = t.roles[primaryRole as keyof typeof t.roles] ?? primaryRole;
 
   // Notification bell data — unread count drives the badge; top 10
   // (read + unread) populate the popover. Both queries hit a covering
@@ -115,6 +121,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 >
                   <Shield className="h-3.5 w-3.5" />
                   Security
+                </Link>
+                <Link
+                  href="/settings/notifications"
+                  className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <Bell className="h-3.5 w-3.5" />
+                  Notifications
                 </Link>
                 <form action={signOutAction}>
                   <button

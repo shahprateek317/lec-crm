@@ -10,40 +10,73 @@
 //   2. Second POST has email + password + totpCode. If the code is
 //      wrong, we surface `?error=totp_invalid`.
 //
-// We keep the password in a hidden field on the TOTP step rather than
-// stashing a half-session cookie. Risk is bounded: the field is
-// `type=password`, only the user's browser sees it, and TOTP_INVALID
-// just bounces back to the same form. Avoids a stateful half-session
-// that we'd have to expire + revoke.
+// Enrollment gate for ADMIN/SUPER_ADMIN:
+//   If the admin has no TOTP configured, authorize() throws
+//   TotpEnrollmentRequiredError. We issue a short-lived HttpOnly cookie
+//   (not a URL param — avoids browser history / server log leakage)
+//   and redirect to /admin-enroll where they can set up their
+//   authenticator app before getting a session.
 
 import { signIn } from "@/lib/auth";
 import { AuthError, CredentialsSignin } from "next-auth";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import {
+  generateEnrollmentToken,
+  ENROLLMENT_COOKIE,
+} from "@/lib/enrollment-token";
+import { generatePreauthToken, PREAUTH_COOKIE } from "@/lib/preauth-token";
 
 export async function signInAction(formData: FormData) {
-  const email       = String(formData.get("email") ?? "");
-  const password    = String(formData.get("password") ?? "");
-  const totpCode    = String(formData.get("totpCode") ?? "").trim();
-  const callbackUrl = String(formData.get("callbackUrl") ?? "/dashboard");
+  const email         = String(formData.get("email") ?? "");
+  const password      = String(formData.get("password") ?? "");
+  const totpCode      = String(formData.get("totpCode") ?? "").trim();
+  const preauthToken  = String(formData.get("preauthToken") ?? "");
+  const callbackUrl   = String(formData.get("callbackUrl") ?? "/dashboard");
 
   try {
     await signIn("credentials", {
       email,
-      password,
+      password: password || undefined,
       totpCode: totpCode || undefined,
+      preauthToken: preauthToken || undefined,
       redirectTo: callbackUrl,
     });
   } catch (err) {
     if (err instanceof CredentialsSignin) {
-      // err.code is set by our custom TotpRequiredError / TotpInvalidError
-      // subclasses in @/lib/auth. Default ("CredentialsSignin") means
-      // bad email/password.
       const code = (err as { code?: string }).code ?? "invalid";
+
+      // Admin has no TOTP set up — redirect to the enrollment grace page.
+      // Token goes in an HttpOnly cookie so it never appears in URLs.
+      if (code === "totp_enrollment_required") {
+        const token = generateEnrollmentToken(email);
+        const cookieStore = await cookies();
+        cookieStore.set(ENROLLMENT_COOKIE, token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          path: "/admin-enroll",
+          maxAge: 15 * 60,
+        });
+        redirect("/admin-enroll");
+      }
+
+      // After password is verified but TOTP is still needed, issue a
+      // short-lived pre-auth cookie so step 2 doesn't ask for the password again.
+      if (code === "totp_required") {
+        const cookieStore = await cookies();
+        cookieStore.set(PREAUTH_COOKIE, generatePreauthToken(email), {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          path: "/sign-in",
+          maxAge: 5 * 60,
+        });
+      }
+
       const params = new URLSearchParams({
         error: code,
         callbackUrl,
-        // Preserve email so the user doesn't retype it on the TOTP step.
-        // Password lives in the hidden input the form re-renders.
         email,
       });
       redirect(`/sign-in?${params.toString()}`);

@@ -39,7 +39,7 @@ export default async function DistantHealingPage({
     prisma.client.findUnique({ where: { id } }),
     prisma.distantHealingGroup.findUnique({ where: { clientId: id } }),
     prisma.user.findMany({
-      where: { active: true, role: { in: ["HEALER", "ADMIN"] } },
+      where: { active: true, roles: { hasSome: ["HEALER", "ADMIN"] } },
       orderBy: { name: "asc" },
     }),
     prisma.healerUpdate.findMany({

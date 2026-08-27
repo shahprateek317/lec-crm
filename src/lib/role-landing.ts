@@ -17,6 +17,9 @@ const LANDING: Partial<Record<Role, string>> = {
   QUALITY_CONTROLLER:  "/quality",
 };
 
-export function landingForRole(role: Role): string {
-  return LANDING[role] ?? "/dashboard";
+export function landingForRole(roles: Role[]): string {
+  for (const role of roles) {
+    if (LANDING[role]) return LANDING[role]!;
+  }
+  return "/dashboard";
 }

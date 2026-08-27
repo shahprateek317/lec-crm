@@ -17,6 +17,26 @@ import {
   sendTemplateAction,
   softDeleteClientAction,
 } from "./actions";
+import { updateActionPlanAction } from "./action-plan/actions";
+
+const ACTION_LABELS: Record<string, string> = {
+  BROCHURE_SENT: "Brochure Sent",
+  COUNSELING: "Counseling",
+  CENTER_VISIT_DEMO_HEALING: "Center Visit with Demo Healing",
+  INTRO_PRANIC_HEALING_GROUP: "Introduction to Pranic Healing Group",
+  MEDITATION_GROUP: "Meditation Group",
+  TELEPHONIC_CALL: "Telephonic Call",
+  PAID_HEALING: "Paid Healing",
+  COURSE_ENROLLMENT: "Course Enrollment",
+  NOT_INTERESTED: "Not Interested",
+};
+
+const STATUS_TONE: Record<string, string> = {
+  ACTIVE: "bg-emerald-100 text-emerald-800",
+  DORMANT: "bg-amber-100 text-amber-800",
+  NOT_INTERESTED: "bg-rose-100 text-rose-800",
+  CONVERTED: "bg-purple-100 text-purple-800",
+};
 
 export const dynamic = "force-dynamic";
 
@@ -36,10 +56,10 @@ export default async function LeadDetailPage({
   const { id } = await params;
   const sp = await searchParams;
   const session = await auth();
-  const viewerIsAdmin = !!session?.user && isAdmin(session.user.role);
+  const viewerIsAdmin = !!session?.user && isAdmin(session.user.roles);
 
   const creditBalance = await getCreditBalance(id);
-  const [client, staff, templates, counsellings, visits, recentPayments, recentHealing] = await Promise.all([
+  const [client, staff, templates, counsellings, visits, recentPayments, upcomingHealingSessions, recentHealing] = await Promise.all([
     prisma.client.findUnique({
       where: { id },
       include: {
@@ -58,7 +78,7 @@ export default async function LeadDetailPage({
       },
     }),
     prisma.user.findMany({
-      where: { active: true, role: { in: ["COORDINATOR", "COUNSELLOR", "HEALER"] } },
+      where: { active: true, roles: { hasSome: ["COORDINATOR", "COUNSELLOR", "HEALER"] } },
       orderBy: { name: "asc" },
     }),
     prisma.whatsAppTemplate.findMany({
@@ -81,6 +101,11 @@ export default async function LeadDetailPage({
       take: 5,
     }),
     prisma.healingSession.findMany({
+      where: { clientId: id, scheduledAt: { gte: new Date() } },
+      orderBy: { scheduledAt: "asc" },
+      include: { healer: { select: { name: true } } },
+    }),
+    prisma.healingSession.findMany({
       where: { clientId: id },
       orderBy: { date: "desc" },
       take: 5,
@@ -94,10 +119,15 @@ export default async function LeadDetailPage({
   const openCounselling = counsellings.find((c) => !c.doneAt);
   const openVisit = visits.find((v) => !v.visitedAt);
 
-  // Interleave events for the timeline.
+  // Interleave all events for the conversation timeline.
   type Event =
     | { kind: "stage"; at: Date; label: string; detail: string }
-    | { kind: "whatsapp"; at: Date; label: string; detail: string; status: string };
+    | { kind: "whatsapp"; at: Date; label: string; detail: string; status: string }
+    | { kind: "counselling"; at: Date; label: string; detail: string }
+    | { kind: "visit"; at: Date; label: string; detail: string }
+    | { kind: "healing"; at: Date; label: string; detail: string }
+    | { kind: "payment"; at: Date; label: string; detail: string }
+    | { kind: "course"; at: Date; label: string; detail: string };
 
   const events: Event[] = [
     ...client.stageTransitions.map<Event>((t) => ({
@@ -113,6 +143,36 @@ export default async function LeadDetailPage({
       detail: m.body.split("\n")[0].slice(0, 120),
       status: m.status,
     })),
+    ...counsellings.filter((c) => c.doneAt).map<Event>((c) => ({
+      kind: "counselling",
+      at: c.doneAt!,
+      label: "Counselling completed",
+      detail: `with ${c.counsellor.name}`,
+    })),
+    ...counsellings.filter((c) => !c.doneAt).map<Event>((c) => ({
+      kind: "counselling",
+      at: c.scheduledAt,
+      label: "Counselling scheduled",
+      detail: `with ${c.counsellor.name}`,
+    })),
+    ...visits.filter((v) => v.visitedAt).map<Event>((v) => ({
+      kind: "visit",
+      at: v.visitedAt!,
+      label: "Centre visit completed",
+      detail: v.assignedHealer ? `with ${v.assignedHealer.name}` : "unassigned healer",
+    })),
+    ...Array.from(new Map([...recentHealing, ...upcomingHealingSessions].map(h => [h.id, h])).values()).map<Event>((h) => ({
+      kind: "healing",
+      at: h.scheduledAt ?? h.date,
+      label: `Healing session${h.scheduledAt && h.scheduledAt > new Date() ? " (upcoming)" : ""}`,
+      detail: `${h.healer.name} · ${h.mode === "DISTANT" ? "Distant" : "In-person"}${h.creditUsed ? "" : " · complimentary"}`,
+    })),
+    ...recentPayments.map<Event>((p) => ({
+      kind: "payment",
+      at: p.createdAt,
+      label: `Payment — ₹${p.amount.toLocaleString("en-IN")}`,
+      detail: p.status.toLowerCase(),
+    })),
   ].sort((a, b) => b.at.getTime() - a.at.getTime());
 
   return (
@@ -127,15 +187,99 @@ export default async function LeadDetailPage({
 
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <h1 className="font-serif text-3xl font-medium tracking-tight">{client.name}</h1>
             <StageBadge stage={client.stage} />
+            {client.leadStatus && (
+              <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_TONE[client.leadStatus] ?? "bg-muted text-muted-foreground"}`}>
+                {client.leadStatus.replace("_", " ")}
+              </span>
+            )}
+            {client.nextAction && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">
+                Next: {ACTION_LABELS[client.nextAction] ?? client.nextAction}
+                {client.nextActionDate && ` · ${format(client.nextActionDate, "dd MMM")}`}
+              </span>
+            )}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             Added {formatDistanceToNow(client.createdAt, { addSuffix: true })} · Source: {client.source.toLowerCase().replace("_", " ")}
           </p>
         </div>
       </header>
+
+      {/* ── Action Plan ── */}
+      <Card className="rounded-xl border-primary/20 bg-primary/5">
+        <CardContent className="p-4">
+          <form action={updateActionPlanAction} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <input type="hidden" name="clientId" value={client.id} />
+
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Current Action</p>
+              <select name="currentAction" defaultValue={client.currentAction ?? ""} className={selectCls}>
+                <option value="">— None —</option>
+                {Object.entries(ACTION_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Next Action</p>
+              <select name="nextAction" defaultValue={client.nextAction ?? ""} className={selectCls}>
+                <option value="">— None —</option>
+                {Object.entries(ACTION_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Next Action Date</p>
+              <input
+                type="date"
+                name="nextActionDate"
+                defaultValue={client.nextActionDate ? format(client.nextActionDate, "yyyy-MM-dd") : ""}
+                className={selectCls}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Lead Status</p>
+              <select name="leadStatus" defaultValue={client.leadStatus ?? "ACTIVE"} className={selectCls}>
+                <option value="ACTIVE">Active</option>
+                <option value="DORMANT">Dormant</option>
+                <option value="NOT_INTERESTED">Not Interested</option>
+                <option value="CONVERTED">Converted</option>
+              </select>
+            </div>
+
+            <div className="space-y-1 sm:col-span-2 lg:col-span-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Remarks</p>
+              <input
+                type="text"
+                name="actionRemarks"
+                defaultValue={client.actionRemarks ?? ""}
+                placeholder="Notes on current situation or plan…"
+                className={selectCls}
+              />
+            </div>
+
+            <div className="space-y-1 sm:col-span-2 lg:col-span-1">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Journey Reason</p>
+              <input
+                type="text"
+                name="journeyReason"
+                defaultValue={client.journeyReason ?? ""}
+                placeholder="e.g. Financial, Busy Schedule, Distance…"
+                className={selectCls}
+              />
+            </div>
+
+            <div className="flex items-end">
+              <button type="submit" className="h-10 w-full rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
+                Save plan
+              </button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Main info + stage transition */}
@@ -177,6 +321,16 @@ export default async function LeadDetailPage({
                     <p className="truncate text-xs text-muted-foreground">
                       with {openCounselling.counsellor.name}
                     </p>
+                    {openCounselling.meetLink && (
+                      <a
+                        href={openCounselling.meetLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1 inline-block truncate text-xs font-medium text-primary hover:underline"
+                      >
+                        🔗 Meeting link
+                      </a>
+                    )}
                   </div>
                   <Link
                     href={`/leads/${client.id}/counselling/${openCounselling.id}/complete`}
@@ -214,7 +368,7 @@ export default async function LeadDetailPage({
                     + Schedule counselling
                   </Link>
                 )}
-                {!openVisit && (client.stage === "COUNSELING_DONE" || client.stage === "VISIT_DONE" || client.stage === "HEALING_ACTIVE") && (
+                {(client.stage === "COUNSELING_DONE" || client.stage === "VISIT_DONE" || client.stage === "HEALING_ACTIVE") && (
                   <Link
                     href={`/leads/${client.id}/visits/new`}
                     className="inline-flex h-9 items-center rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted"
@@ -241,9 +395,17 @@ export default async function LeadDetailPage({
                       </li>
                     ))}
                     {visits.filter((v) => v.visitedAt).map((v) => (
-                      <li key={v.id} className="flex items-center gap-2">
-                        <CheckCircle2 className="h-3 w-3 text-emerald-600" />
-                        Visit — {format(v.visitedAt!, "dd MMM yyyy")}
+                      <li key={v.id} className="flex items-center justify-between gap-2">
+                        <span className="flex items-center gap-2">
+                          <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                          Visit — {format(v.visitedAt!, "dd MMM yyyy")}
+                        </span>
+                        <Link
+                          href={`/leads/${client.id}/visits/${v.id}/edit`}
+                          className="text-primary hover:underline"
+                        >
+                          Edit details
+                        </Link>
                       </li>
                     ))}
                   </ul>
@@ -360,6 +522,12 @@ export default async function LeadDetailPage({
                   + Payment
                 </Link>
                 <Link
+                  href={`/leads/${client.id}/healing/schedule`}
+                  className="inline-flex h-9 items-center gap-1 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                >
+                  <Sparkles className="h-3.5 w-3.5" /> Schedule healing
+                </Link>
+                <Link
                   href={`/leads/${client.id}/healing/new`}
                   className="inline-flex h-9 items-center gap-1 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted"
                 >
@@ -378,6 +546,26 @@ export default async function LeadDetailPage({
                   Courses
                 </Link>
               </div>
+              {upcomingHealingSessions.length > 0 && (
+                <div className="space-y-2">
+                  {upcomingHealingSessions.map((hs) => (
+                    <div key={hs.id} className="flex items-center justify-between gap-3 rounded-lg bg-muted/50 p-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">
+                          {hs.mode === "DISTANT" ? "Distant" : "In-person"} healing · {format(hs.scheduledAt!, "dd MMM, HH:mm")}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">with {hs.healer.name}</p>
+                        {hs.meetLink && (
+                          <a href={hs.meetLink} target="_blank" rel="noopener noreferrer"
+                             className="mt-1 inline-block text-xs font-medium text-primary hover:underline">
+                            🔗 Meeting link
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
               {recentHealing.length > 0 && (
                 <details className="text-xs text-muted-foreground">
                   <summary className="cursor-pointer hover:text-foreground">Recent sessions</summary>
@@ -518,28 +706,43 @@ export default async function LeadDetailPage({
 
           <Card className="rounded-xl">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Timeline
+              <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <Clock className="h-4 w-4" />
+                Conversation Timeline
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {events.length === 0 && (
                 <p className="text-xs text-muted-foreground">Nothing yet.</p>
               )}
-              {events.slice(0, 20).map((e, i) => (
-                <div key={i} className="border-l-2 border-border pl-3">
-                  <p className="text-xs font-medium">
-                    {e.label}
-                    {e.kind === "whatsapp" && (
-                      <span className="ml-1.5 text-muted-foreground">· {e.status.toLowerCase()}</span>
-                    )}
-                  </p>
-                  <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{e.detail}</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    {format(e.at, "dd MMM yyyy, HH:mm")}
-                  </p>
-                </div>
-              ))}
+              {events.slice(0, 30).map((e, i) => {
+                const kindColor: Record<string, string> = {
+                  stage:       "border-primary",
+                  whatsapp:    "border-emerald-400",
+                  counselling: "border-blue-400",
+                  visit:       "border-violet-400",
+                  healing:     "border-amber-400",
+                  payment:     "border-teal-400",
+                  course:      "border-rose-400",
+                };
+                return (
+                  <div key={i} className={`border-l-2 pl-3 ${kindColor[e.kind] ?? "border-border"}`}>
+                    <p className="text-xs font-medium">
+                      {e.label}
+                      {"status" in e && (
+                        <span className="ml-1.5 text-muted-foreground">· {(e as { status: string }).status.toLowerCase()}</span>
+                      )}
+                    </p>
+                    <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{e.detail}</p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      {format(e.at, "dd MMM yyyy, HH:mm")}
+                    </p>
+                  </div>
+                );
+              })}
+              {events.length > 30 && (
+                <p className="text-[11px] text-muted-foreground">+ {events.length - 30} older events</p>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -624,6 +827,8 @@ export default async function LeadDetailPage({
     </div>
   );
 }
+
+const selectCls = "flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 function InfoRow({
   icon,

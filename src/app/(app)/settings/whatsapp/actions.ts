@@ -41,3 +41,11 @@ export async function testWhatsAppAction() {
   const flag = result.ok ? "ok" : "err";
   redirect(`/settings/whatsapp?test=${flag}:${encodeURIComponent(result.detail)}`);
 }
+
+export async function saveZoomLinkAction(formData: FormData) {
+  const session = await requireRole("ADMIN");
+  const link = String(formData.get("zoomIntroLink") ?? "").trim();
+  await setSetting(SETTING_KEYS.zoomIntroLink, link, session.user.id);
+  revalidatePath("/settings/whatsapp");
+  redirect("/settings/whatsapp?ok=1");
+}

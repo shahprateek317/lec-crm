@@ -46,7 +46,7 @@ const ROLE_HINT: Record<string, { title: string; body: string; href: string; cta
 
 export default async function DashboardPage() {
   const session = await auth();
-  const role = session?.user.role ?? "COORDINATOR";
+  const role = session?.user.roles?.[0] ?? "COORDINATOR";
   const hint = ROLE_HINT[role] ?? ROLE_HINT.COORDINATOR;
   const monthStart = startOfMonth(new Date());
   const thirtyDaysAgo = subDays(new Date(), 30);
@@ -141,7 +141,7 @@ export default async function DashboardPage() {
         </div>
       </header>
 
-      {role === "ADMIN" && (
+      {(session?.user.roles ?? []).includes("ADMIN") && (
         <section>
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Set up your centre

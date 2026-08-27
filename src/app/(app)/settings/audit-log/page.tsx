@@ -1,4 +1,4 @@
-// Admin audit-log viewer.
+﻿// Admin audit-log viewer.
 //
 // Reads append-only AuditLog rows. Every place we touch sensitive data
 // (Documents, WhatsApp threads, Healing sessions, Client export, Client
@@ -13,7 +13,7 @@
 //   - from / to   inclusive day boundaries (ISO date)
 //
 // Pagination: offset/limit, 50/page. AuditLog is admin-only and rarely
-// hit, so offset is fine — cursor pagination would be premature.
+// hit, so offset is fine â€” cursor pagination would be premature.
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -26,7 +26,7 @@ import { ClipboardList, ChevronLeft, ChevronRight } from "lucide-react";
 import type { AuditAction, Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Audit log · Settings" };
+export const metadata = { title: "Audit log Â· Settings" };
 
 const PAGE_SIZE = 50;
 
@@ -44,9 +44,11 @@ const ALL_ACTIONS: AuditAction[] = [
   "USER_ROLE_CHANGED",
   "SETTING_CHANGED",
   "CERT_VERIFIED",
+  "PAYOUT_RECORDED",
+  "PAYOUT_DELETED",
 ];
 
-// Friendlier labels (matches the enum values 1:1 — show readable names).
+// Friendlier labels (matches the enum values 1:1 â€” show readable names).
 const ACTION_LABEL: Record<AuditAction, string> = {
   DOCUMENT_VIEWED:        "Document viewed",
   DOCUMENT_DOWNLOADED:    "Document downloaded",
@@ -61,6 +63,8 @@ const ACTION_LABEL: Record<AuditAction, string> = {
   USER_ROLE_CHANGED:      "User role changed",
   SETTING_CHANGED:        "Setting changed",
   CERT_VERIFIED:          "Certification verified",
+  PAYOUT_RECORDED:        "Payout recorded",
+  PAYOUT_DELETED:         "Payout deleted",
 };
 
 type SearchParams = {
@@ -84,7 +88,7 @@ export default async function AuditLogPage({
 }) {
   const session = await auth();
   if (!session?.user) redirect("/sign-in?callbackUrl=/settings/audit-log");
-  if (!isAdmin(session.user.role)) redirect("/dashboard");
+  if (!isAdmin(session.user.roles)) redirect("/dashboard");
 
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page ?? "1") || 1);
@@ -115,15 +119,16 @@ export default async function AuditLogPage({
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
       include: {
-        actor: { select: { id: true, name: true, role: true } },
+        actor:       { select: { id: true, name: true, roles: true } },
+        actorClient: { select: { id: true, name: true } },
       },
     }),
     prisma.auditLog.count({ where }),
-    // Distinct actors who have ever written an entry — used to populate
+    // Distinct actors who have ever written an entry â€” used to populate
     // the dropdown. Cap at 200 to keep the query cheap.
     prisma.user.findMany({
       where: { auditLogEntries: { some: {} } },
-      select: { id: true, name: true, role: true },
+      select: { id: true, name: true, roles: true },
       orderBy: { name: "asc" },
       take: 200,
     }),
@@ -154,14 +159,14 @@ export default async function AuditLogPage({
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             Who accessed what, and when. Every document view, WhatsApp
             thread open, healing-session drill-down, and admin action
-            lands here. Append-only — entries can&apos;t be edited or deleted.
+            lands here. Append-only â€” entries can&apos;t be edited or deleted.
           </p>
         </div>
         <Link
           href="/settings"
           className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
         >
-          ← Settings
+          â† Settings
         </Link>
       </header>
 
@@ -200,7 +205,7 @@ export default async function AuditLogPage({
               <input
                 name="targetType"
                 defaultValue={targetType ?? ""}
-                placeholder="Client / Document / …"
+                placeholder="Client / Document / â€¦"
                 className="w-full rounded-md border border-border bg-card px-2 py-1.5 text-sm"
               />
             </label>
@@ -267,8 +272,12 @@ export default async function AuditLogPage({
                       {formatDistanceToNow(e.at, { addSuffix: true })}
                     </td>
                     <td className="px-2 py-2 align-top">
-                      <div className="text-sm font-medium text-foreground">{e.actor.name}</div>
-                      <div className="text-[11px] text-muted-foreground">{e.actor.role}</div>
+                      <div className="text-sm font-medium text-foreground">
+                        {e.actor?.name ?? e.actorClient?.name ?? e.actorType}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {e.actor?.roles?.[0] ?? e.actorType}
+                      </div>
                     </td>
                     <td className="px-2 py-2 align-top">
                       <span className="inline-flex rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground">
@@ -277,10 +286,10 @@ export default async function AuditLogPage({
                     </td>
                     <td className="px-2 py-2 align-top text-xs">
                       <span className="text-muted-foreground">{e.targetType}</span>
-                      <span className="ml-1 font-mono text-[11px] text-foreground/80">{e.targetId.slice(0, 12)}…</span>
+                      <span className="ml-1 font-mono text-[11px] text-foreground/80">{e.targetId.slice(0, 12)}â€¦</span>
                     </td>
                     <td className="px-2 py-2 align-top text-[11px] font-mono text-muted-foreground">
-                      {e.ip ?? "—"}
+                      {e.ip ?? "â€”"}
                     </td>
                     <td className="px-2 py-2 align-top">
                       {e.meta ? (
@@ -293,7 +302,7 @@ export default async function AuditLogPage({
                           </pre>
                         </details>
                       ) : (
-                        <span className="text-muted-foreground">—</span>
+                        <span className="text-muted-foreground">â€”</span>
                       )}
                     </td>
                   </tr>
@@ -309,7 +318,7 @@ export default async function AuditLogPage({
         <div className="flex items-center justify-between gap-4 text-xs text-muted-foreground">
           <span>
             {totalCount.toLocaleString()} {totalCount === 1 ? "entry" : "entries"}
-            {totalPages > 1 && ` · page ${page} of ${totalPages}`}
+            {totalPages > 1 && ` Â· page ${page} of ${totalPages}`}
           </span>
           <div className="flex items-center gap-1">
             {page > 1 && (

@@ -17,16 +17,16 @@ export const INBOX_ROLES: ReadonlyArray<Role> = [
   "SUPER_ADMIN", "ADMIN", "COORDINATOR", "COUNSELLOR", "SENIOR_COUNSELLOR",
 ];
 
-export function canUseInbox(role: Role): boolean {
-  return INBOX_ROLES.includes(role);
+export function canUseInbox(roles: Role[]): boolean {
+  return roles.some((r) => INBOX_ROLES.includes(r));
 }
 
-export function isAdmin(role: Role): boolean {
-  return ADMIN_ROLES.includes(role);
+export function isAdmin(roles: Role[]): boolean {
+  return roles.some((r) => ADMIN_ROLES.includes(r));
 }
 
-export function canAuditQuality(role: Role): boolean {
-  return QUALITY_AUDITOR_ROLES.includes(role);
+export function canAuditQuality(roles: Role[]): boolean {
+  return roles.some((r) => QUALITY_AUDITOR_ROLES.includes(r));
 }
 
 export async function requireSession() {
@@ -37,12 +37,12 @@ export async function requireSession() {
 
 export async function requireRole(...allowed: Role[]) {
   const session = await requireSession();
-  if (!allowed.includes(session.user.role)) throw new Error("FORBIDDEN");
+  if (!session.user.roles.some((r) => allowed.includes(r))) throw new Error("FORBIDDEN");
   return session;
 }
 
 export async function requireAdmin() {
   const session = await requireSession();
-  if (!isAdmin(session.user.role)) throw new Error("FORBIDDEN");
+  if (!isAdmin(session.user.roles)) throw new Error("FORBIDDEN");
   return session;
 }

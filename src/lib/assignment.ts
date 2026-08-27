@@ -48,7 +48,7 @@ export async function suggestCounsellors(
   if (!client) return [];
 
   const counsellors = await prisma.user.findMany({
-    where: { active: true, role: { in: ["COUNSELLOR", "SENIOR_COUNSELLOR"] } },
+    where: { active: true, roles: { hasSome: ["COUNSELLOR", "SENIOR_COUNSELLOR"] } },
     include: { counsellorProfile: true },
   });
 
@@ -71,7 +71,7 @@ export async function suggestCounsellors(
         reasons.push(p.availabilitySlots.length === 0 ? "No availability set (assumed open)" : "Available at this time");
       }
       // Senior bonus
-      if (u.role === "SENIOR_COUNSELLOR") {
+      if (u.roles.includes("SENIOR_COUNSELLOR")) {
         score += 1;
         reasons.push("Senior counsellor");
       }
@@ -163,7 +163,7 @@ export async function suggestHealers(
   if (!client) return [];
 
   const healers = await prisma.user.findMany({
-    where: { active: true, role: { in: ["HEALER", "SENIOR_HEALER"] } },
+    where: { active: true, roles: { hasSome: ["HEALER", "SENIOR_HEALER"] } },
     include: { healerProfile: true },
   });
 
@@ -198,7 +198,7 @@ export async function suggestHealers(
         score += 2;
         reasons.push("Centre-based; client is nearby");
       }
-      if (u.role === "SENIOR_HEALER") {
+      if (u.roles.includes("SENIOR_HEALER")) {
         score += 2;
         reasons.push("Senior healer");
       }

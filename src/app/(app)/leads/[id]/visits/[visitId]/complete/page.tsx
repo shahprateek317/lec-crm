@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { format } from "date-fns";
 import { prisma } from "@/lib/prisma";
+import { DemoHealingSection } from "@/components/healing/demo-healing-section";
 import { completeVisitAction } from "./actions";
 
 export const metadata = { title: "Complete visit" };
@@ -48,23 +49,46 @@ export default async function CompleteVisitPage({
         <input type="hidden" name="visitId" value={visit.id} />
         <input type="hidden" name="clientId" value={visit.clientId} />
 
-        <Field id="initialFeedback" label="Initial feedback from the client">
+        <Field id="problemsDiscussed" label="Problems & concerns discussed" required>
           <textarea
-            id="initialFeedback"
-            name="initialFeedback"
-            rows={4}
-            className={`${inputCls} min-h-24 resize-y py-2`}
-            placeholder="How did they feel after the session?"
+            id="problemsDiscussed"
+            name="problemsDiscussed"
+            rows={5}
+            required
+            className={`${inputCls} min-h-28 resize-y py-2`}
+            placeholder="Describe the client's health issues, concerns, and background discussed during the visit…"
           />
         </Field>
 
-        <Field id="notes" label="Internal notes">
+        <Field id="healingExplained" label="Pranic healing information shared">
+          <textarea
+            id="healingExplained"
+            name="healingExplained"
+            rows={3}
+            className={`${inputCls} min-h-20 resize-y py-2`}
+            placeholder="What was explained about pranic healing — how it works, benefits, process…"
+          />
+        </Field>
+
+        <DemoHealingSection />
+
+        <Field id="initialFeedback" label="Client's feedback after the session">
+          <textarea
+            id="initialFeedback"
+            name="initialFeedback"
+            rows={3}
+            className={`${inputCls} min-h-20 resize-y py-2`}
+            placeholder="How did they feel? Any immediate response or comments?"
+          />
+        </Field>
+
+        <Field id="notes" label="Internal notes (staff only)">
           <textarea
             id="notes"
             name="notes"
             rows={3}
             className={`${inputCls} min-h-20 resize-y py-2`}
-            placeholder="Private observations for staff."
+            placeholder="Private observations — not visible to client."
           />
         </Field>
 

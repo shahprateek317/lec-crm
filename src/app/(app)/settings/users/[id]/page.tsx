@@ -8,6 +8,7 @@ import { ensureProfile } from "@/lib/users";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AvailabilityGrid } from "@/components/availability-grid";
 import { ChipMultiSelect } from "@/components/chip-multi-select";
+import { DeleteUserButton } from "@/components/delete-user-button";
 import { TagInput } from "@/components/tag-input";
 import { FlashToaster } from "@/components/flash-toaster";
 import { t } from "@/lib/i18n";
@@ -22,6 +23,7 @@ import {
   updateCoordinatorProfileAction,
   updateAdminProfileAction,
   resetPasswordAction,
+  deleteUserAction,
 } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -66,15 +68,17 @@ export default async function UserDetailPage({
   searchParams: Promise<{ error?: string; ok?: string }>;
 }) {
   const session = await auth();
-  if (!session?.user || !isAdmin(session.user.role)) redirect("/dashboard");
+  if (!session?.user || !isAdmin(session.user.roles)) redirect("/dashboard");
   const { id } = await params;
   const sp = await searchParams;
 
   const user = await prisma.user.findUnique({ where: { id } });
   if (!user) notFound();
 
-  // Make sure the role profile exists so the form has a row to update.
-  await ensureProfile(user.id, user.role);
+  // Make sure the role profiles exist so the form has rows to update.
+  for (const role of user.roles) {
+    await ensureProfile(user.id, role);
+  }
 
   const [healer, counsellor, coordinator, admin, recentSessions, recentCounsellings] = await Promise.all([
     prisma.healerProfile.findUnique({ where: { userId: id } }),
@@ -95,7 +99,7 @@ export default async function UserDetailPage({
       <header>
         <h1 className="font-serif text-3xl font-medium tracking-tight">{user.name}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {t.roles[user.role as keyof typeof t.roles] ?? user.role}
+          {user.roles.map(r => t.roles[r as keyof typeof t.roles] ?? r).join(" + ")}
           {user.employeeCode ? ` · ${user.employeeCode}` : ""}
           {!user.active && " · INACTIVE"}
         </p>
@@ -127,12 +131,12 @@ export default async function UserDetailPage({
                 <input id="whatsappPhone" name="whatsappPhone" type="tel" defaultValue={user.whatsappPhone ?? ""} className={inputCls} placeholder="If different from phone" />
               </Field>
 
-              <Field id="role" label="Role" required>
-                <select id="role" name="role" defaultValue={user.role} required className={inputCls}>
-                  {ROLES.map((r) => (
-                    <option key={r} value={r}>{t.roles[r as keyof typeof t.roles]}</option>
-                  ))}
-                </select>
+              <Field id="roles" label="Roles" required>
+                <ChipMultiSelect
+                  name="roles"
+                  options={ROLES.map((r) => ({ value: r, label: t.roles[r as keyof typeof t.roles] ?? r }))}
+                  defaultSelected={user.roles}
+                />
               </Field>
               <Field id="gender" label="Gender">
                 <select id="gender" name="gender" defaultValue={user.gender ?? ""} className={inputCls}>
@@ -178,7 +182,7 @@ export default async function UserDetailPage({
       </Card>
 
       {/* ── Role-specific profile ── */}
-      {(user.role === "HEALER" || user.role === "SENIOR_HEALER") && healer && (
+      {(user.roles.includes("HEALER") || user.roles.includes("SENIOR_HEALER")) && healer && (
         <Card className="rounded-xl">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">Healer profile</CardTitle>
@@ -282,7 +286,7 @@ export default async function UserDetailPage({
         </Card>
       )}
 
-      {(user.role === "COUNSELLOR" || user.role === "SENIOR_COUNSELLOR") && counsellor && (
+      {(user.roles.includes("COUNSELLOR") || user.roles.includes("SENIOR_COUNSELLOR")) && counsellor && (
         <Card className="rounded-xl">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">Counsellor profile</CardTitle>
@@ -329,7 +333,7 @@ export default async function UserDetailPage({
         </Card>
       )}
 
-      {user.role === "COORDINATOR" && coordinator && (
+      {user.roles.includes("COORDINATOR") && coordinator && (
         <Card className="rounded-xl">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">Coordinator profile</CardTitle>
@@ -366,7 +370,7 @@ export default async function UserDetailPage({
         </Card>
       )}
 
-      {(user.role === "ADMIN" || user.role === "SUPER_ADMIN") && admin && (
+      {(user.roles.includes("ADMIN") || user.roles.includes("SUPER_ADMIN")) && admin && (
         <Card className="rounded-xl">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">Admin permissions</CardTitle>
@@ -443,6 +447,21 @@ export default async function UserDetailPage({
           </form>
           <p className="mt-2 text-xs text-muted-foreground">
             Share this with the staff member privately; ask them to change it after first sign-in.
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* ── Delete account ── */}
+      <Card className="rounded-xl border-destructive/40">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium text-destructive">
+            Delete account
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DeleteUserButton id={user.id} name={user.name} action={deleteUserAction} />
+          <p className="mt-2 text-xs text-muted-foreground">
+            Permanently removes the account. Only use for duplicates or test accounts with no history.
           </p>
         </CardContent>
       </Card>

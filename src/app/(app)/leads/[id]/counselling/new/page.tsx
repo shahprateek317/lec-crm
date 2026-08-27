@@ -21,7 +21,7 @@ export default async function ScheduleCounsellingPage({
   const [client, counsellors, suggestions] = await Promise.all([
     prisma.client.findUnique({ where: { id }, select: { id: true, name: true } }),
     prisma.user.findMany({
-      where: { active: true, role: { in: ["COUNSELLOR", "SENIOR_COUNSELLOR", "ADMIN"] } },
+      where: { active: true, roles: { hasSome: ["COUNSELLOR", "SENIOR_COUNSELLOR", "ADMIN"] } },
       orderBy: { name: "asc" },
     }),
     suggestCounsellors(id, undefined, 3),

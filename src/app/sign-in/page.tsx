@@ -13,9 +13,13 @@ import { signInAction } from "./actions";
 import { t } from "@/lib/i18n";
 import Link from "next/link";
 import { env } from "@/lib/env";
+import { cookies } from "next/headers";
+import { verifyPreauthToken, PREAUTH_COOKIE } from "@/lib/preauth-token";
 import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Sign in" };
+export const dynamic = "force-dynamic";
+export const headers = async () => [["Cache-Control", "no-store, no-cache, must-revalidate"]];
 
 const DEMO_ROLES = [
   { role: "Admin",       email: "admin@lec.app",       tone: "bg-primary/10 text-primary" },
@@ -28,10 +32,18 @@ const DEMO_ROLES = [
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; callbackUrl?: string; email?: string }>;
+  searchParams: Promise<{ error?: string; callbackUrl?: string; email?: string; enrolled?: string; codes?: string }>;
 }) {
   const sp = await searchParams;
   const isDemo = env.WHATSAPP_PROVIDER === "stub" && env.RAZORPAY_PROVIDER === "stub";
+
+  // One-time backup codes display after admin enrollment via /admin-enroll.
+  let enrollmentBackupCodes: string[] | null = null;
+  if (sp.enrolled === "1" && sp.codes) {
+    try {
+      enrollmentBackupCodes = JSON.parse(Buffer.from(sp.codes, "base64url").toString("utf8")) as string[];
+    } catch { /* ignore malformed */ }
+  }
 
   // 2FA step gate. The action redirects with the user's email in the
   // query so we can pre-fill + show it read-only on the TOTP step.
@@ -43,9 +55,22 @@ export default async function SignInPage({
   // action handles both fields in one call.
   const needsTotp = sp.error === "totp_required" || sp.error === "totp_invalid";
 
+  // On the TOTP step, read the pre-auth cookie so we can skip password re-entry.
+  let preauthToken: string | null = null;
+  if (needsTotp) {
+    const cookieStore = await cookies();
+    const raw = cookieStore.get(PREAUTH_COOKIE)?.value;
+    if (raw) {
+      const result = verifyPreauthToken(raw);
+      if (result.ok && result.email.toLowerCase() === (sp.email ?? "").toLowerCase()) {
+        preauthToken = raw;
+      }
+    }
+  }
+
   return (
     <main className="pranic-glow flex min-h-screen items-center justify-center px-6 py-12">
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-8 shadow-sm">
+      <div className={`w-full rounded-2xl border border-border bg-card p-8 shadow-sm ${enrollmentBackupCodes ? "max-w-lg" : "max-w-sm"}`}>
         <div className="mb-6 text-center">
           <Link
             href="/"
@@ -119,21 +144,25 @@ export default async function SignInPage({
             />
           </div>
 
-          <div className="space-y-1.5">
-            <label htmlFor="password" className="text-sm font-medium">
-              {t.signIn.password}
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              minLength={6}
-              autoFocus={!needsTotp}
-              className="flex h-10 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-          </div>
+          {preauthToken ? (
+            <input type="hidden" name="preauthToken" value={preauthToken} />
+          ) : (
+            <div className="space-y-1.5">
+              <label htmlFor="password" className="text-sm font-medium">
+                {t.signIn.password}
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+                minLength={6}
+                autoFocus={!needsTotp}
+                className="flex h-10 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
+          )}
 
           {needsTotp && (
             <div className="space-y-1.5">
@@ -153,6 +182,30 @@ export default async function SignInPage({
                 placeholder="123 456"
                 className="flex h-12 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-center font-mono text-lg tracking-widest outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
+            </div>
+          )}
+
+          {sp.enrolled === "1" && !enrollmentBackupCodes && (
+            <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700 border border-emerald-200">
+              Two-factor authentication is now active. Please sign in.
+            </p>
+          )}
+
+          {enrollmentBackupCodes && (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4 space-y-3">
+              <p className="text-sm font-medium text-emerald-900">
+                ✓ Two-factor authentication is active
+              </p>
+              <p className="text-xs text-emerald-800">
+                Save these 10 backup codes — each can be used <strong>once</strong> to sign
+                in if you lose your phone. They won&apos;t be shown again.
+              </p>
+              <div className="grid grid-cols-2 gap-1 rounded bg-white border border-emerald-200 p-2 font-mono text-xs">
+                {enrollmentBackupCodes.map((code) => (
+                  <span key={code} className="text-center tracking-wider">{code}</span>
+                ))}
+              </div>
+              <p className="text-xs text-emerald-700">Now sign in below with your authenticator app.</p>
             </div>
           )}
 

@@ -4,7 +4,22 @@
 
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import crypto from "node:crypto";
 import type { Role } from "@prisma/client";
+
+// Inline version of encryptForStorage from src/lib/crypto.ts.
+// The seed runs via tsx in the Docker runner stage where src/ is not present,
+// so we can't import from the app source. Algorithm is identical: AES-256-GCM,
+// key = SHA-256(AUTH_SECRET), format = base64(iv||ciphertext||tag).
+function seedEncrypt(plaintext: string): string {
+  const authSecret = process.env.AUTH_SECRET ?? "";
+  const key = crypto.createHash("sha256").update(authSecret).digest();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+  const enc = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return Buffer.concat([iv, enc, tag]).toString("base64");
+}
 
 const prisma = new PrismaClient();
 
@@ -19,7 +34,7 @@ const ROLE_PREFIX: Record<Role, string> = {
 async function ensureCode(userId: string, role: Role): Promise<void> {
   const u = await prisma.user.findUnique({ where: { id: userId }, select: { employeeCode: true } });
   if (u?.employeeCode) return;
-  const count = await prisma.user.count({ where: { role } });
+  const count = await prisma.user.count({ where: { roles: { has: role } } });
   await prisma.user.update({
     where: { id: userId },
     data: { employeeCode: `${ROLE_PREFIX[role]}${String(count).padStart(3, "0")}` },
@@ -33,21 +48,36 @@ async function main() {
   // Mobile-friendly credentials for the demo. Short email, no symbols in
   // password. Password is the same across all four so it's easy to remember;
   // roles are differentiated by the email only.
-  const staff: Array<{ email: string; name: string; role: "ADMIN" | "COORDINATOR" | "COUNSELLOR" | "HEALER" | "QUALITY_CONTROLLER"; password: string }> = [
-    { email: "admin@lec.app",       name: "Admin",              role: "ADMIN",              password: "demo1234" },
-    { email: "coordinator@lec.app", name: "Coordinator",        role: "COORDINATOR",        password: "demo1234" },
-    { email: "counsellor@lec.app",  name: "Counsellor",         role: "COUNSELLOR",         password: "demo1234" },
-    { email: "healer@lec.app",      name: "Healer",             role: "HEALER",             password: "demo1234" },
-    { email: "quality@lec.app",     name: "Quality Controller", role: "QUALITY_CONTROLLER", password: "demo1234" },
+  const staff: Array<{ email: string; name: string; roles: Role[]; password: string }> = [
+    { email: "admin@lec.app",       name: "Admin",              roles: ["ADMIN"],              password: "demo1234" },
+    { email: "coordinator@lec.app", name: "Coordinator",        roles: ["COORDINATOR"],        password: "demo1234" },
+    { email: "counsellor@lec.app",  name: "Counsellor",         roles: ["COUNSELLOR"],         password: "demo1234" },
+    { email: "healer@lec.app",      name: "Healer",             roles: ["HEALER"],             password: "demo1234" },
+    { email: "quality@lec.app",     name: "Quality Controller", roles: ["QUALITY_CONTROLLER"], password: "demo1234" },
   ];
+  // Fixed TOTP secret used by the demo admin account (admin@lec.app).
+  // Smoke scripts generate the live code from this secret with Node crypto
+  // so they can sign in as admin without a real phone.
+  // NEVER use this secret in production — it is committed to the repo.
+  const DEMO_ADMIN_TOTP_SECRET = "LECCRMADMINDEMOSEC";
+
   for (const s of staff) {
     const passwordHash = await bcrypt.hash(s.password, 10);
+    // Pre-enroll TOTP for admin roles so the TOTP enforcement gate doesn't
+    // block demo sign-in. The smoke tests generate codes from DEMO_ADMIN_TOTP_SECRET.
+    const isAdmin = (s.roles as string[]).includes("ADMIN") || (s.roles as string[]).includes("SUPER_ADMIN");
+    const totpData = isAdmin
+      ? {
+          totpSecret: seedEncrypt(DEMO_ADMIN_TOTP_SECRET),
+          totpEnabledAt: new Date("2026-01-01T00:00:00.000Z"),
+        }
+      : {};
     const u = await prisma.user.upsert({
       where: { email: s.email },
-      update: { name: s.name, role: s.role, active: true },
-      create: { email: s.email, name: s.name, role: s.role, active: true, passwordHash },
+      update: { name: s.name, roles: s.roles as Role[], active: true, ...totpData },
+      create: { email: s.email, name: s.name, roles: s.roles as Role[], active: true, passwordHash, ...totpData },
     });
-    await ensureCode(u.id, u.role);
+    await ensureCode(u.id, (s.roles as Role[])[0]);
   }
   console.log(`  ✓ ${staff.length} staff accounts (with employee codes)`);
 

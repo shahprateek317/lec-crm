@@ -23,7 +23,6 @@ import {
 import { prismaClientAuthStore } from "@/lib/client-auth-store";
 import { setClientSessionCookie } from "@/lib/client-session-cookie";
 import { getWhatsAppProvider } from "@/lib/providers/whatsapp";
-import { buildConfirmUrl } from "@/lib/check-in"; // re-uses AUTH_URL base
 import { audit } from "@/lib/audit";
 
 // ── Phone normalisation ──────────────────────────────────────────────
@@ -65,17 +64,16 @@ export async function requestSignInAction(formData: FormData) {
 
     const challenge = await generateChallenge(prismaClientAuthStore, client.id, { ip });
     if (challenge.ok) {
-      const linkUrl = buildConfirmUrl("").replace(/\/confirm\/$/, `/me/auth/${challenge.token}`);
-      // Fire-and-forget so the form submission isn't blocked by Meta latency.
+      // Meta's AUTHENTICATION-category templates only allow a single OTP
+      // variable — no name personalisation, no custom link. The magic-link
+      // token is still minted (consumedVia: LINK stays usable if reached
+      // through another channel) but we no longer put the URL in the
+      // WhatsApp message body since Meta's template format doesn't support it.
       getWhatsAppProvider().sendTemplate({
         clientId: client.id,
         phone,
         templateName: "client_magic_link",
-        variables: [
-          client.name.split(" ")[0] ?? "there",
-          challenge.otp,
-          linkUrl,
-        ],
+        variables: [challenge.otp],
       }).catch((err) => console.error("[me/sign-in] template send failed", err));
     }
     // Rate-limit hits still take the same redirect — opaque to the caller.

@@ -14,15 +14,15 @@ export const authConfig = {
     async jwt({ token, user }) {
       if (user) {
         (token as { uid?: string }).uid = user.id;
-        (token as { role?: Role }).role = (user as { role?: Role }).role;
+        (token as { roles?: Role[] }).roles = (user as { roles?: Role[] }).roles;
       }
       return token;
     },
     async session({ session, token }) {
-      const t = token as { uid?: string; role?: Role };
+      const t = token as { uid?: string; roles?: Role[] };
       if (t.uid && session.user) {
         session.user.id = t.uid;
-        session.user.role = t.role ?? "COORDINATOR";
+        session.user.roles = t.roles ?? ["COORDINATOR"];
       }
       return session;
     },
@@ -32,8 +32,14 @@ export const authConfig = {
       // /me/* uses a separate session cookie (passwordless WhatsApp magic-
       // link / OTP) — it bypasses NextAuth's gate here and runs its own
       // check via requireClient() in the route layer.
-      const publicPaths = ["/", "/sign-in", "/enquiry", "/api/enquiry", "/dev/pay", "/confirm", "/me"];
       const { pathname } = request.nextUrl;
+      // /admin-enroll is the TOTP enrollment grace page for admins who
+      // sign in without 2FA configured. Access is gated by a short-lived
+      // HttpOnly cookie issued by the sign-in action — not freely public.
+      // Matched exactly (not prefix) to avoid accidentally publicising
+      // /admin-enroll-something if such a route is added in the future.
+      if (pathname === "/admin-enroll") return true;
+      const publicPaths = ["/", "/sign-in", "/enquiry", "/api/enquiry", "/dev/pay", "/confirm", "/me", "/privacy", "/summary"];
       if (publicPaths.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
         return true;
       }

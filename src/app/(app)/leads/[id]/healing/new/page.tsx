@@ -22,7 +22,7 @@ export default async function LogHealingPage({
   const [client, healers, balance, suggestions, inProgress] = await Promise.all([
     prisma.client.findUnique({ where: { id }, select: { id: true, name: true } }),
     prisma.user.findMany({
-      where: { active: true, role: { in: ["HEALER", "SENIOR_HEALER", "ADMIN"] } },
+      where: { active: true, roles: { hasSome: ["HEALER", "SENIOR_HEALER", "ADMIN"] } },
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),

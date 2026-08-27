@@ -18,6 +18,37 @@ datasource db {
 // Auth / Users
 // ──────────────────────────────────────────────────────────────────────────
 
+enum ActionType {
+  BROCHURE_SENT
+  COUNSELING
+  CENTER_VISIT_DEMO_HEALING
+  INTRO_PRANIC_HEALING_GROUP
+  MEDITATION_GROUP
+  TELEPHONIC_CALL
+  PAID_HEALING
+  COURSE_ENROLLMENT
+  NOT_INTERESTED
+}
+
+enum LeadStatus {
+  ACTIVE
+  DORMANT
+  NOT_INTERESTED
+  CONVERTED
+}
+
+enum AttendanceStatus {
+  REGISTERED
+  ATTENDED
+  DID_NOT_ATTEND
+}
+
+enum MeditationMemberStatus {
+  ACTIVE
+  INACTIVE
+  EXITED
+}
+
 enum Role {
   SUPER_ADMIN
   ADMIN
@@ -103,7 +134,7 @@ model User {
   phone         String?
   whatsappPhone String?
   passwordHash  String
-  role          Role
+  roles         Role[]
   active        Boolean @default(true)
 
   // Phase 2c — TOTP 2FA. Secret is AES-256-GCM encrypted via
@@ -150,6 +181,7 @@ model User {
   qualityNotesAuthored QualityNote[]    @relation("QualityNoteAuthor")
   notifications        Notification[]
   auditLogEntries      AuditLog[]       @relation("AuditLogActor")
+  backupCodes          UserBackupCode[]
   threadAssignments    WhatsAppThread[] @relation("ThreadAssignee")
   threadResolutions    WhatsAppThread[] @relation("ThreadResolver")
 
@@ -157,6 +189,10 @@ model User {
   counsellorProfile  CounsellorProfile?
   coordinatorProfile CoordinatorProfile?
   adminProfile       AdminProfile?
+
+  healerPayouts           HealerPayout[]           @relation("HealerPayouts")
+  payoutsCreated          HealerPayout[]           @relation("PayoutsCreated")
+  notificationPreferences NotificationPreference[]
 }
 
 // ── Role-specific profiles ───────────────────────────────────────────────
@@ -216,6 +252,32 @@ model HealerProfile {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ── Healer payouts ───────────────────────────────────────────────────────────
+// Records actual cash disbursements to healers. `gross` is an immutable
+// snapshot of computed earnings at the time of recording — changing a
+// healer's fee profile later does NOT alter historical payouts.
+// `period` is "YYYY-MM" (e.g. "2026-06"). One payout per healer per period.
+
+model HealerPayout {
+  id          String @id @default(cuid())
+  healerId    String
+  healer      User   @relation("HealerPayouts", fields: [healerId], references: [id], onDelete: Cascade)
+  createdById String
+  createdBy   User   @relation("PayoutsCreated", fields: [createdById], references: [id])
+
+  period     String // "YYYY-MM"
+  gross      Int // earnings snapshot (₹)
+  deductions Int      @default(0)
+  net        Int // gross - deductions, enforced in server action
+  paidAt     DateTime
+  paymentRef String?
+  notes      String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([healerId, period])
 }
 
 model CounsellorProfile {
@@ -432,6 +494,12 @@ model Client {
   leadScore              Int                @default(0) // computed nudge for prioritisation
   source                 LeadSource         @default(MANUAL)
   stage                  PipelineStage      @default(NEW)
+  leadStatus             LeadStatus         @default(ACTIVE)
+  currentAction          ActionType?
+  nextAction             ActionType?
+  nextActionDate         DateTime?
+  actionRemarks          String?
+  journeyReason          String?
   assignedToId           String?
   assignedTo             User?              @relation("AssignedCoordinator", fields: [assignedToId], references: [id])
   notes                  String?
@@ -463,15 +531,61 @@ model Client {
   referralRewardsAsReferee ReferralReward[]     @relation("ReferralRewardsAsReferee")
   // Phase 1a additions — back-relations.
   documents                Document[]           @relation("ClientDocuments")
+  auditLogEntries          AuditLog[]           @relation("AuditLogClientActor")
   whatsappThread           WhatsAppThread?
   magicLinks               ClientMagicLink[]
   portalSessions           ClientSession[]
+  pranicGroupAttendances   PranicGroupAttendance[]
+  meditationMembership     MeditationGroupMembership?
 
   @@index([stage])
   @@index([assignedToId])
   @@index([createdAt])
   @@index([referrerClientId])
   @@index([deletedAt])
+}
+
+// ── Introduction to Pranic Healing Group ────────────────────────────────────
+model PranicGroupSession {
+  id          String   @id @default(cuid())
+  scheduledAt DateTime
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  attendances PranicGroupAttendance[]
+}
+
+model PranicGroupAttendance {
+  id        String           @id @default(cuid())
+  sessionId String
+  session   PranicGroupSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  clientId  String
+  client    Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  status    AttendanceStatus @default(REGISTERED)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([sessionId, clientId])
+  @@index([clientId])
+}
+
+// ── Meditation Group ─────────────────────────────────────────────────────────
+model MeditationGroupMembership {
+  id              String                 @id @default(cuid())
+  clientId        String                 @unique
+  client          Client                 @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  joinedAt        DateTime               @default(now())
+  attendanceCount Int                    @default(0)
+  lastAttendedAt  DateTime?
+  status               MeditationMemberStatus @default(ACTIVE)
+  exitedAt             DateTime?
+  whatsappGroupAddedAt DateTime?
+  notes                String?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  @@index([status])
 }
 
 model StageTransition {
@@ -499,6 +613,7 @@ model CounselingSession {
   counsellorId String
   counsellor   User      @relation(fields: [counsellorId], references: [id])
   scheduledAt  DateTime
+  meetLink     String?
   doneAt       DateTime?
   issueRefined String?
   severity     Int?
@@ -517,9 +632,15 @@ model Visit {
   assignedHealerId String?
   assignedHealer   User?     @relation(fields: [assignedHealerId], references: [id])
   scheduledAt      DateTime
-  visitedAt        DateTime?
-  initialFeedback  String?
-  notes            String?
+  visitedAt           DateTime?
+  problemsDiscussed   String?
+  healingExplained    String?
+  demoHealingDone     Boolean   @default(false)
+  demoChakrasBefore   Json?
+  demoChakrasAfter    Json?
+  demoHealingNotes    String?
+  initialFeedback     String?
+  notes               String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -650,9 +771,18 @@ model HealingSession {
   endCheckInToken        String?   @unique
   clientConfirmedEndAt   DateTime?
 
+  // Advance scheduling — set when a coordinator books a future session.
+  // NULL means the session was logged after-the-fact (legacy behaviour).
+  scheduledAt DateTime?
+  meetLink    String? // Jitsi URL for distant sessions only
+
   // Phase 2b — set by the pre-session reminder cron after a successful
   // 1-hour WhatsApp ping. NULL = "never sent" so the cron can dedupe.
   reminderSentAt DateTime?
+
+  // Public healing summary page — token sent to client via WA after session end.
+  // Route: /summary/<summaryToken>  (no login required; token is the auth).
+  summaryToken   String?   @unique
 
   creditEntry  CreditLedgerEntry?
   feedback     ClientFeedback?
@@ -1147,6 +1277,39 @@ model Notification {
   @@index([recipientId, createdAt])
 }
 
+// ── TOTP backup codes ─────────────────────────────────────────────────────
+// ── Notification preferences ─────────────────────────────────────────────────
+// Per-user opt-out table. Default is all kinds enabled — a row only exists
+// when the user explicitly disables a kind. `notify()` checks this before
+// writing to the Notification table.
+
+model NotificationPreference {
+  id      String           @id @default(cuid())
+  userId  String
+  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind    NotificationKind
+  enabled Boolean          @default(true)
+
+  @@unique([userId, kind])
+}
+
+// Generated at enrollment: 10 single-use codes stored as SHA-256 hashes.
+// Plaintext displayed ONCE (at generation time) and never stored.
+// Sign-in accepts a backup code in place of a TOTP code — usedAt is set
+// on first use, making the code invalid for future attempts.
+// A counter at 2 remaining unused codes triggers a warning in the UI.
+
+model UserBackupCode {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String // SHA-256(plaintext) — never store plaintext
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, usedAt])
+}
+
 // ── Audit log (DPDP / insider-risk) ──────────────────────────────────────
 // Who accessed what. Required by India's DPDP Act 2025 if questioned.
 // Append-only; admins read at /settings/audit-log.
@@ -1165,20 +1328,28 @@ enum AuditAction {
   USER_ROLE_CHANGED
   SETTING_CHANGED
   CERT_VERIFIED
+  PAYOUT_RECORDED
+  PAYOUT_DELETED
 }
 
 model AuditLog {
-  id         String      @id @default(cuid())
-  actorId    String
-  actor      User        @relation("AuditLogActor", fields: [actorId], references: [id])
-  action     AuditAction
-  targetType String // "Client" | "Document" | "HealingSession" | "User" | ...
-  targetId   String
-  meta       Json? // additional context (download UA, prev/next values, etc.)
-  ip         String?
-  at         DateTime    @default(now())
+  id            String      @id @default(cuid())
+  // actorId is nullable to support Client and System actors that have no User row.
+  // actorType distinguishes the three cases: "User" (default), "Client", "System".
+  actorId       String?
+  actor         User?       @relation("AuditLogActor", fields: [actorId], references: [id])
+  actorType     String      @default("User") // "User" | "Client" | "System"
+  actorClientId String?
+  actorClient   Client?     @relation("AuditLogClientActor", fields: [actorClientId], references: [id], onDelete: SetNull)
+  action        AuditAction
+  targetType    String // "Client" | "Document" | "HealingSession" | "User" | ...
+  targetId      String
+  meta          Json? // additional context (download UA, prev/next values, etc.)
+  ip            String?
+  at            DateTime    @default(now())
 
   @@index([actorId, at])
+  @@index([actorClientId, at])
   @@index([targetType, targetId, at])
   @@index([action, at])
 }

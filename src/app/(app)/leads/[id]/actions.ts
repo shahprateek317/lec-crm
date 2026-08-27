@@ -8,6 +8,7 @@ import { transitionStage } from "@/lib/pipeline";
 import { getWhatsAppProvider } from "@/lib/providers/whatsapp";
 import { audit } from "@/lib/audit";
 import type { PipelineStage } from "@prisma/client";
+import { format } from "date-fns";
 
 export async function transitionStageAction(formData: FormData) {
   const session = await requireSession();
@@ -65,8 +66,25 @@ export async function sendTemplateAction(formData: FormData) {
 
   // Guess variables for known templates from the client record.
   let variables: string[] = [];
-  if (templateName === "lead_welcome" || templateName === "visit_invitation" || templateName === "feedback_request") {
+  let buttonSuffix: string | undefined;
+  if (templateName === "lead_welcome") {
+    variables = [client.name.split(" ")[0], "https://crm.lifeenergycentre.in/files/lec-brochure.pdf"];
+  } else if (templateName === "visit_invitation" || templateName === "feedback_request") {
     variables = [client.name.split(" ")[0]];
+  } else if (templateName === "counseling_confirmation" || templateName === "counseling_meeting_link" || templateName === "session_join_link") {
+    const upcoming = await prisma.counselingSession.findFirst({
+      where: { clientId, scheduledAt: { gte: new Date() } },
+      orderBy: { scheduledAt: "asc" },
+      include: { counsellor: true },
+    });
+    variables = [
+      client.name.split(" ")[0],
+      upcoming ? format(upcoming.scheduledAt, "dd MMM, HH:mm") : "—",
+      upcoming?.counsellor.name ?? "—",
+    ];
+    if (templateName === "session_join_link" && upcoming?.meetLink) {
+      variables.push(upcoming.meetLink);
+    }
   }
 
   await getWhatsAppProvider().sendTemplate({
@@ -74,6 +92,7 @@ export async function sendTemplateAction(formData: FormData) {
     phone: client.phone,
     templateName,
     variables,
+    buttonSuffix,
   });
   revalidatePath(`/leads/${clientId}`);
 }
@@ -100,7 +119,7 @@ export async function sendTemplateAction(formData: FormData) {
  */
 export async function softDeleteClientAction(formData: FormData) {
   const session = await requireSession();
-  if (!isAdmin(session.user.role)) {
+  if (!isAdmin(session.user.roles)) {
     redirect(`/leads/${formData.get("clientId") ?? ""}?error=forbidden`);
   }
 

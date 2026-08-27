@@ -2,10 +2,10 @@
 // Key rule: a client can only enrol if they've completed all prerequisites.
 
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getPaymentProvider } from "@/lib/providers/payment";
 import { getWhatsAppProvider } from "@/lib/providers/whatsapp";
-import { getCreditBalance } from "@/lib/credits";
 import { transitionStage } from "@/lib/pipeline";
 
 export type EligibilityResult =
@@ -48,13 +48,6 @@ export const enrolSchema = z.object({
 export async function enrolClient(input: z.infer<typeof enrolSchema>) {
   const parsed = enrolSchema.parse(input);
 
-  const existing = await prisma.enrollment.findUnique({
-    where: { clientId_courseId: { clientId: parsed.clientId, courseId: parsed.courseId } },
-  });
-  if (existing && existing.status !== "DROPPED") {
-    throw new Error("Client is already enrolled in this course.");
-  }
-
   const eligibility = await checkEligibility(parsed.clientId, parsed.courseId);
   if (!eligibility.eligible) {
     throw new Error(
@@ -65,15 +58,29 @@ export async function enrolClient(input: z.infer<typeof enrolSchema>) {
   const course = await prisma.course.findUniqueOrThrow({ where: { id: parsed.courseId } });
   const client = await prisma.client.findUniqueOrThrow({ where: { id: parsed.clientId } });
 
-  let creditsToAdjust = 0;
-  if (parsed.applyCreditsToFee) {
-    const bal = await getCreditBalance(parsed.clientId);
-    creditsToAdjust = Math.max(0, bal);
-  }
-  const rupeeAdjust = creditsToAdjust * 500; // post-credit rate per spec
-  const feeToPay = Math.max(0, course.fee - rupeeAdjust);
-
   return prisma.$transaction(async (tx) => {
+    // "Already enrolled" + credit balance must be read inside the
+    // transaction (Serializable below), otherwise two concurrent calls
+    // (double-click, retried POST) can both pass the check and both debit
+    // the same credit balance, driving the ledger negative.
+    const existing = await tx.enrollment.findUnique({
+      where: { clientId_courseId: { clientId: parsed.clientId, courseId: parsed.courseId } },
+    });
+    if (existing && existing.status !== "DROPPED") {
+      throw new Error("Client is already enrolled in this course.");
+    }
+
+    let creditsToAdjust = 0;
+    if (parsed.applyCreditsToFee) {
+      const bal = await tx.creditLedgerEntry.aggregate({
+        where: { clientId: parsed.clientId },
+        _sum: { delta: true },
+      });
+      creditsToAdjust = Math.max(0, bal._sum.delta ?? 0);
+    }
+    const rupeeAdjust = creditsToAdjust * 500; // post-credit rate per spec
+    const feeToPay = Math.max(0, course.fee - rupeeAdjust);
+
     const enrolment = await tx.enrollment.upsert({
       where: { clientId_courseId: { clientId: parsed.clientId, courseId: parsed.courseId } },
       create: {
@@ -129,21 +136,21 @@ export async function enrolClient(input: z.infer<typeof enrolSchema>) {
     // Everything above is in the transaction. Side-effects (provider link,
     // WhatsApp, stage transition) happen after commit — see below.
     return { enrolment, payment, course, client, feeToPay };
-  }).then(async (result) => {
-    if (result.payment && result.feeToPay > 0) {
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }).then(async (txResult) => {
+    if (txResult.payment && txResult.feeToPay > 0) {
       const link = await getPaymentProvider().createPaymentLink({
-        amount: result.feeToPay,
-        description: `Course: ${result.course.name}`,
+        amount: txResult.feeToPay,
+        description: `Course: ${txResult.course.name}`,
         client: {
-          id: result.client.id,
-          name: result.client.name,
-          phone: result.client.phone,
-          email: result.client.email,
+          id: txResult.client.id,
+          name: txResult.client.name,
+          phone: txResult.client.phone,
+          email: txResult.client.email,
         },
-        reference: result.payment.id,
+        reference: txResult.payment.id,
       });
-      await prisma.payment.update({
-        where: { id: result.payment.id },
+      const updatedPayment = await prisma.payment.update({
+        where: { id: txResult.payment.id },
         data: {
           providerPaymentLinkId: link.providerLinkId,
           providerPaymentLinkUrl: link.url,
@@ -151,28 +158,29 @@ export async function enrolClient(input: z.infer<typeof enrolSchema>) {
       });
       getWhatsAppProvider()
         .sendTemplate({
-          clientId: result.client.id,
-          phone: result.client.phone,
+          clientId: txResult.client.id,
+          phone: txResult.client.phone,
           templateName: "payment_link",
           variables: [
-            result.client.name.split(" ")[0],
-            result.course.name,
-            String(result.feeToPay),
+            txResult.client.name.split(" ")[0],
+            txResult.course.name,
+            String(txResult.feeToPay),
             "0",
             link.url,
           ],
         })
         .catch((err) => console.error("[courses] WhatsApp failed", err));
+      return { ...txResult, payment: updatedPayment };
     } else {
       // Fully adjusted via credits — mark client converted now.
       await transitionStage({
-        clientId: result.client.id,
+        clientId: txResult.client.id,
         toStage: "CONVERTED",
         byUserId: parsed.byUserId,
-        note: `Enrolled in ${result.course.name} (fully credit-adjusted)`,
+        note: `Enrolled in ${txResult.course.name} (fully credit-adjusted)`,
       }).catch(() => void 0);
+      return txResult;
     }
-    return result;
   });
 }
 
